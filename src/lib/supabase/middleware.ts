@@ -29,19 +29,24 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthPage =
-    request.nextUrl.pathname === "/auth" ||
-    request.nextUrl.pathname.startsWith("/auth/");
+  const pathname = request.nextUrl.pathname;
+  const isAuthPage = pathname === "/auth" || pathname.startsWith("/auth/");
+  const isPublicPage = pathname === "/" || isAuthPage;
 
-  if (!user && !isAuthPage && request.nextUrl.pathname !== "/") {
+  // Not logged in → trying to access protected page → send to /auth
+  if (!user && !isPublicPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthPage) {
+  // Logged in → trying to access /auth → send to /dashboard
+  if (user && pathname === "/auth") {
+    const next = request.nextUrl.searchParams.get("next") ?? "/dashboard";
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = next;
+    url.searchParams.delete("next");
     return NextResponse.redirect(url);
   }
 

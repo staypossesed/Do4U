@@ -3,101 +3,111 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ClawLogo } from "@/components/icons/claw-logo";
-import { ArrowRight, Sparkles, Camera, MessageCircle, Zap } from "lucide-react";
+import { fadeUp, staggerChildren as stagger } from "@/lib/motion";
+import { ArrowRight, Mic, Camera, Zap, ShieldCheck, Star } from "lucide-react";
 import Link from "next/link";
-
-const fadeUp = {
-  initial: { opacity: 0, y: 30 },
-  animate: { opacity: 1, y: 0 },
-};
-
-const stagger = {
-  animate: { transition: { staggerChildren: 0.12 } },
-};
 
 export default function LandingPage() {
   return (
-    <div className="min-h-dvh flex flex-col bg-background">
+    <div className="min-h-dvh flex flex-col bg-background overflow-hidden relative">
+
+      {/* Background blobs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-orange-500/10 blur-3xl" />
+        <div className="absolute top-1/3 -right-32 w-80 h-80 rounded-full bg-purple-600/10 blur-3xl" />
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-pink-500/8 blur-3xl" />
+      </div>
+
       <motion.div
-        className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center max-w-lg mx-auto"
+        className="relative z-10 flex-1 flex flex-col px-5 pt-16 pb-10 max-w-lg mx-auto w-full"
         variants={stagger}
         initial="initial"
         animate="animate"
       >
-        {/* Logo */}
-        <motion.div variants={fadeUp}>
-          <ClawLogo size={72} animated />
+        {/* Logo + badge */}
+        <motion.div variants={fadeUp} className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full claw-gradient blur-xl opacity-40 scale-150" />
+            <ClawLogo size={72} animated />
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-orange-500/30 bg-orange-500/10">
+            <Star className="h-3 w-3 text-orange-400 fill-orange-400" />
+            <span className="text-xs text-orange-400 font-medium">Sell4U • Zero комиссий</span>
+          </div>
         </motion.div>
 
-        {/* Title */}
-        <motion.h1
-          variants={fadeUp}
-          className="mt-6 text-4xl font-extrabold tracking-tight"
-        >
-          <span className="claw-gradient-text">Claw</span>Everything
-        </motion.h1>
+        {/* Headline */}
+        <motion.div variants={fadeUp} className="mt-6 text-center space-y-2">
+          <h1 className="text-[2.6rem] font-extrabold leading-[1.1] tracking-tight">
+            <span className="claw-gradient-text">Claw</span>
+            <span className="dark:text-white text-gray-900">Everything</span>
+          </h1>
+          <p className="text-lg dark:text-gray-300 text-gray-600 leading-snug">
+            Продаёшь — <strong className="dark:text-white text-gray-900">Claw делает всё</strong><br />
+            за тебя 24/7
+          </p>
+        </motion.div>
 
-        {/* Tagline */}
-        <motion.p
-          variants={fadeUp}
-          className="mt-3 text-lg text-muted-foreground"
-        >
-          Продавай одним голосовым сообщением.
-          <br />
-          <span className="font-semibold text-foreground">
-            Claw делает ВСЁ за тебя.
-          </span>
-        </motion.p>
-
-        {/* Features */}
-        <motion.div variants={fadeUp} className="mt-8 grid gap-3 w-full">
+        {/* Feature cards */}
+        <motion.div variants={stagger} className="mt-10 space-y-3">
           {[
             {
+              icon: Mic,
+              color: "from-orange-500 to-rose-500",
+              bg: "bg-orange-500/10 dark:bg-orange-500/10",
+              title: "Расскажи голосом 10 сек",
+              desc: "AI создаёт идеальное описание на RU + EN",
+            },
+            {
               icon: Camera,
-              title: "Сфотографируй",
-              desc: "AI подскажет ракурсы и улучшит фото",
-            },
-            {
-              icon: Sparkles,
-              title: "Расскажи голосом",
-              desc: "10 секунд — и описание готово",
-            },
-            {
-              icon: MessageCircle,
-              title: "Claw ведёт чаты",
-              desc: "Авто-ответы, отсев троллей, 24/7",
+              color: "from-rose-500 to-purple-600",
+              bg: "bg-rose-500/10 dark:bg-rose-500/10",
+              title: "4–8 фото с AI-улучшением",
+              desc: "Авто убирает фон, добавляет свет, 360°",
             },
             {
               icon: Zap,
-              title: "Мгновенная продажа",
-              desc: "GPS-встреча, эскроу, автоматический отзыв",
+              color: "from-purple-600 to-blue-500",
+              bg: "bg-purple-600/10 dark:bg-purple-600/10",
+              title: "Claw ведёт чаты за тебя",
+              desc: "Авто-ответы, горячие покупатели, эскроу",
             },
-          ].map((feature) => (
-            <div
-              key={feature.title}
-              className="flex items-center gap-3 p-3 rounded-xl bg-card border text-left"
+            {
+              icon: ShieldCheck,
+              color: "from-blue-500 to-teal-500",
+              bg: "bg-blue-500/10 dark:bg-blue-500/10",
+              title: "0% комиссии навсегда",
+              desc: "Avito, VK, eBay — готовые шаблоны",
+            },
+          ].map((f, i) => (
+            <motion.div
+              key={f.title}
+              variants={fadeUp}
+              custom={i}
+              className={`flex items-center gap-4 p-4 rounded-2xl border dark:border-white/5 border-black/5 ${f.bg}`}
             >
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg claw-gradient shrink-0">
-                <feature.icon className="h-5 w-5 text-white" />
+              <div className={`flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br ${f.color} shrink-0 shadow-lg`}>
+                <f.icon className="h-5 w-5 text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold">{feature.title}</p>
-                <p className="text-xs text-muted-foreground">{feature.desc}</p>
+                <p className="font-semibold text-sm leading-tight">{f.title}</p>
+                <p className="text-xs dark:text-gray-400 text-gray-500 mt-0.5">{f.desc}</p>
               </div>
-            </div>
+            </motion.div>
           ))}
         </motion.div>
 
         {/* CTA */}
-        <motion.div variants={fadeUp} className="mt-8 w-full space-y-3">
-          <Button variant="claw" size="xl" className="w-full" asChild>
+        <motion.div variants={fadeUp} className="mt-8 space-y-3">
+          <Button variant="claw" size="xl" className="w-full rounded-2xl font-bold glow-orange" asChild>
             <Link href="/auth">
-              Начать продавать
-              <ArrowRight className="h-5 w-5 ml-1" />
+              Начать продавать бесплатно
+              <ArrowRight className="h-5 w-5" />
             </Link>
           </Button>
-          <p className="text-xs text-muted-foreground">
-            Бесплатно · 0% комиссии на внутреннем маркетплейсе
+          <p className="text-center text-xs dark:text-gray-500 text-gray-400">
+            Без карты · Без комиссий · Только одежда, электроника, книги и мебель
           </p>
         </motion.div>
       </motion.div>
