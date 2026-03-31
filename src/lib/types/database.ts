@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type ListingStatus = "draft" | "active" | "sold" | "archived" | "moderation";
+export type ListingStatus = "draft" | "active" | "sold" | "archived" | "moderation" | "rejected";
 
 export type ListingCategory =
   | "clothing"
@@ -21,6 +21,16 @@ export type ModerationStatus = "pending" | "approved" | "rejected" | "flagged";
 
 export interface Database {
   public: {
+    Views: Record<string, {
+      Row: Record<string, unknown>;
+      Relationships: unknown[];
+    }>;
+    Functions: Record<string, {
+      Args: Record<string, unknown>;
+      Returns: unknown;
+    }>;
+    Enums: Record<string, string>;
+    CompositeTypes: Record<string, unknown>;
     Tables: {
       users: {
         Row: {
@@ -58,6 +68,7 @@ export interface Database {
           locale?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       listings: {
         Row: {
@@ -114,8 +125,18 @@ export interface Database {
           tags?: string[];
           location?: Json | null;
           ai_metadata?: Json | null;
+          views_count?: number;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: "listings_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       listing_images: {
         Row: {
@@ -141,6 +162,15 @@ export interface Database {
           order?: number;
           ai_analysis?: Json | null;
         };
+        Relationships: [
+          {
+            foreignKeyName: "listing_images_listing_id_fkey";
+            columns: ["listing_id"];
+            isOneToOne: false;
+            referencedRelation: "listings";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       chats: {
         Row: {
@@ -171,6 +201,15 @@ export interface Database {
           is_claw_managed?: boolean;
           status?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: "chats_listing_id_fkey";
+            columns: ["listing_id"];
+            isOneToOne: false;
+            referencedRelation: "listings";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       notifications: {
         Row: {
@@ -196,6 +235,7 @@ export interface Database {
         Update: {
           read?: boolean;
         };
+        Relationships: [];
       };
       moderation_logs: {
         Row: {
@@ -206,6 +246,8 @@ export interface Database {
           ai_reason: string | null;
           reviewer_id: string | null;
           reviewer_notes: string | null;
+          reviewed_at: string | null;
+          human_notes: string | null;
           created_at: string;
         };
         Insert: {
@@ -216,6 +258,8 @@ export interface Database {
           ai_reason?: string | null;
           reviewer_id?: string | null;
           reviewer_notes?: string | null;
+          reviewed_at?: string | null;
+          human_notes?: string | null;
           created_at?: string;
         };
         Update: {
@@ -224,7 +268,18 @@ export interface Database {
           ai_reason?: string | null;
           reviewer_id?: string | null;
           reviewer_notes?: string | null;
+          reviewed_at?: string | null;
+          human_notes?: string | null;
         };
+        Relationships: [
+          {
+            foreignKeyName: "moderation_logs_listing_id_fkey";
+            columns: ["listing_id"];
+            isOneToOne: false;
+            referencedRelation: "listings";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
   };

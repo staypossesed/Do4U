@@ -218,14 +218,19 @@ create table public.moderation_logs (
 
 alter table public.moderation_logs enable row level security;
 
-create policy "Only admins and listing owners can view moderation logs"
+create policy "Listing owners and authenticated users can view moderation logs"
   on public.moderation_logs for select
   using (
-    exists (
-      select 1 from public.listings l
-      where l.id = listing_id and l.user_id = auth.uid()
-    )
+    auth.uid() is not null
   );
+
+create policy "Authenticated users can insert moderation logs"
+  on public.moderation_logs for insert
+  with check (auth.uid() is not null);
+
+create policy "Authenticated users can update moderation logs"
+  on public.moderation_logs for update
+  using (auth.uid() is not null);
 
 create index idx_moderation_listing on public.moderation_logs(listing_id);
 create index idx_moderation_status on public.moderation_logs(status);
