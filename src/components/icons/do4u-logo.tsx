@@ -2,13 +2,14 @@
 
 import { motion } from "framer-motion";
 
-interface ClawLogoProps {
+interface Do4ULogoProps {
   size?: number;
   animated?: boolean;
   className?: string;
 }
 
-export function ClawLogo({ size = 32, animated = true, className }: ClawLogoProps) {
+/** Gradient mark logo for Do4U (Sell4U / Buy4U). */
+export function Do4ULogo({ size = 32, animated = true, className }: Do4ULogoProps) {
   const Wrapper = animated ? motion.div : "div";
   const animProps = animated
     ? {
@@ -18,10 +19,7 @@ export function ClawLogo({ size = 32, animated = true, className }: ClawLogoProp
     : {};
 
   return (
-    <Wrapper
-      className={className}
-      {...animProps}
-    >
+    <Wrapper className={className} {...animProps}>
       <svg
         width={size}
         height={size}
@@ -30,13 +28,12 @@ export function ClawLogo({ size = 32, animated = true, className }: ClawLogoProp
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
-          <linearGradient id="clawGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id="do4uGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#ff6b2b" />
             <stop offset="100%" stopColor="#7c3aed" />
           </linearGradient>
         </defs>
-        <circle cx="24" cy="24" r="22" fill="url(#clawGrad)" />
-        {/* Claw marks */}
+        <circle cx="24" cy="24" r="22" fill="url(#do4uGrad)" />
         <path
           d="M14 12 C14 12, 16 28, 18 34"
           stroke="white"

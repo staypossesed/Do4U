@@ -80,17 +80,17 @@
 }
 
 @layer utilities {
-  /* Core brand gradient */
-  .claw-gradient {
+  /* Do4U brand gradient (Sell4U / Buy4U) */
+  .brand-gradient {
     background: linear-gradient(135deg, #ff6b2b 0%, #e8405a 50%, #7c3aed 100%);
   }
-  .claw-gradient-text {
+  .brand-gradient-text {
     background: linear-gradient(135deg, #ff6b2b 0%, #e8405a 50%, #7c3aed 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  .claw-gradient-subtle {
+  .brand-gradient-subtle {
     background: linear-gradient(135deg, rgba(255,107,43,0.12) 0%, rgba(124,58,237,0.12) 100%);
   }
 

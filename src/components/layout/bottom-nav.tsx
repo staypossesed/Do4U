@@ -42,7 +42,7 @@ export function BottomNav() {
                   whileHover={{ scale: 1.08 }}
                   whileTap={{ scale: 0.92 }}
                   className="flex items-center justify-center w-14 h-14 rounded-2xl
-                    claw-gradient shadow-xl glow-orange"
+                    brand-gradient shadow-xl glow-orange"
                 >
                   <Icon className="h-6 w-6 text-white" strokeWidth={2.5} />
                 </motion.div>
@@ -63,7 +63,7 @@ export function BottomNav() {
                 {active && (
                   <motion.div
                     layoutId="nav-glow"
-                    className="absolute -inset-2 rounded-xl claw-gradient-subtle opacity-60"
+                    className="absolute -inset-2 rounded-xl brand-gradient-subtle opacity-60"
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
                 )}

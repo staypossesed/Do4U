@@ -1,6 +1,6 @@
 "use client";
 
-import { ClawLogo } from "@/components/icons/claw-logo";
+import { Do4ULogo } from "@/components/icons/do4u-logo";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/lib/store";
 import { getTranslations } from "@/lib/i18n";
@@ -28,10 +28,9 @@ export function Header() {
 
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 group">
-          <ClawLogo size={28} />
+          <Do4ULogo size={28} />
           <span className="text-base font-extrabold tracking-tight">
-            <span className="claw-gradient-text">Claw</span>
-            <span className="dark:text-white text-gray-900">Everything</span>
+            <span className="brand-gradient-text">Do4U</span>
           </span>
         </Link>
 
