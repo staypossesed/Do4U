@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ClawLogo } from "@/components/icons/claw-logo";
+import { Do4ULogo } from "@/components/icons/do4u-logo";
 import { fadeUp, staggerChildren as stagger } from "@/lib/motion";
 import { ArrowRight, Mic, Camera, Zap, ShieldCheck, Star } from "lucide-react";
 import Link from "next/link";
@@ -27,8 +27,8 @@ export default function LandingPage() {
         {/* Logo + badge */}
         <motion.div variants={fadeUp} className="flex flex-col items-center gap-4">
           <div className="relative">
-            <div className="absolute inset-0 rounded-full claw-gradient blur-xl opacity-40 scale-150" />
-            <ClawLogo size={72} animated />
+            <div className="absolute inset-0 rounded-full brand-gradient blur-xl opacity-40 scale-150" />
+            <Do4ULogo size={72} animated />
           </div>
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-orange-500/30 bg-orange-500/10">
@@ -40,12 +40,11 @@ export default function LandingPage() {
         {/* Headline */}
         <motion.div variants={fadeUp} className="mt-6 text-center space-y-2">
           <h1 className="text-[2.6rem] font-extrabold leading-[1.1] tracking-tight">
-            <span className="claw-gradient-text">Claw</span>
-            <span className="dark:text-white text-gray-900">Everything</span>
+            <span className="brand-gradient-text">Do4U</span>
           </h1>
           <p className="text-lg dark:text-gray-300 text-gray-600 leading-snug">
-            Продаёшь — <strong className="dark:text-white text-gray-900">Claw делает всё</strong><br />
-            за тебя 24/7
+            Sell4U и Buy4U — <strong className="dark:text-white text-gray-900">делаем за тебя</strong><br />
+            автоматизация продаж и покупок
           </p>
         </motion.div>
 
@@ -70,7 +69,7 @@ export default function LandingPage() {
               icon: Zap,
               color: "from-purple-600 to-blue-500",
               bg: "bg-purple-600/10 dark:bg-purple-600/10",
-              title: "Claw ведёт чаты за тебя",
+              title: "Do4U ведёт чаты за тебя",
               desc: "Авто-ответы, горячие покупатели, эскроу",
             },
             {
@@ -100,7 +99,7 @@ export default function LandingPage() {
 
         {/* CTA */}
         <motion.div variants={fadeUp} className="mt-8 space-y-3">
-          <Button variant="claw" size="xl" className="w-full rounded-2xl font-bold glow-orange" asChild>
+          <Button variant="brand" size="xl" className="w-full rounded-2xl font-bold glow-orange" asChild>
             <Link href="/auth">
               Начать продавать бесплатно
               <ArrowRight className="h-5 w-5" />

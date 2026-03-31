@@ -9,13 +9,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ClawEverything — Sell4U",
-  description: "Claw делает ВСЁ за тебя. Продавай одним голосовым сообщением.",
+  title: "Do4U — Sell4U & Buy4U",
+  description: "Do4U автоматизирует продажи и покупки. Начни с Sell4U — голос и фото, мы сделаем объявление.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "ClawEverything",
+    title: "Do4U",
   },
 };
 

@@ -18,7 +18,7 @@ export const useAppStore = create<AppState>()(
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
     }),
     {
-      name: "claw-app-store",
+      name: "do4u-app-store",
       partialize: (state) => ({ locale: state.locale }),
     }
   )

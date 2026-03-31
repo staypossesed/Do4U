@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClawLogo } from "@/components/icons/claw-logo";
+import { Do4ULogo } from "@/components/icons/do4u-logo";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Mail, Chrome, Sparkles, ArrowLeft } from "lucide-react";
@@ -85,9 +85,9 @@ export default function AuthPage() {
         </Link>
 
         <div className="flex flex-col items-center gap-3">
-          <ClawLogo size={48} />
+          <Do4ULogo size={48} />
           <h1 className="text-2xl font-bold">
-            <span className="claw-gradient-text">Claw</span>Everything
+            <span className="brand-gradient-text">Do4U</span>
           </h1>
         </div>
 
@@ -153,7 +153,7 @@ export default function AuthPage() {
                 )}
                 <Button
                   type="submit"
-                  variant="claw"
+                  variant="brand"
                   className="w-full"
                   disabled={loading}
                 >

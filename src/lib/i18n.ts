@@ -3,8 +3,8 @@ export type Locale = "ru" | "en";
 const translations = {
   ru: {
     app: {
-      name: "ClawEverything",
-      tagline: "Claw делает ВСЁ за тебя",
+      name: "Do4U",
+      tagline: "Делаем за тебя — Sell4U и Buy4U",
     },
     nav: {
       home: "Главная",
@@ -27,7 +27,7 @@ const translations = {
     },
     sell: {
       title: "Sell4U",
-      subtitle: "Я продаю → Claw делает ВСЁ за меня",
+      subtitle: "Я продаю → Do4U делает всё за меня",
       newListing: "+ Продать",
       step1: "Расскажи и покажи",
       step2: "AI улучшает",
@@ -35,14 +35,14 @@ const translations = {
       step4: "Публикация",
       speakPrompt: "Расскажи о товаре голосом (10–15 сек)",
       takePhotos: "Сделай 4–8 фото",
-      aiProcessing: "Claw анализирует...",
+      aiProcessing: "Do4U анализирует...",
       preview: "Превью объявления",
-      publish: "Запустить Claw 🚀",
+      publish: "Запустить Do4U 🚀",
       published: "Опубликовано!",
     },
     buy: {
       title: "Buy4U",
-      subtitle: "Скоро — Claw найдёт лучшие предложения для тебя",
+      subtitle: "Скоро — Buy4U найдёт лучшие предложения для тебя",
       comingSoon: "Скоро",
     },
     dashboard: {
@@ -88,8 +88,8 @@ const translations = {
   },
   en: {
     app: {
-      name: "ClawEverything",
-      tagline: "Claw does EVERYTHING for you",
+      name: "Do4U",
+      tagline: "We do it for you — Sell4U & Buy4U",
     },
     nav: {
       home: "Home",
@@ -112,7 +112,7 @@ const translations = {
     },
     sell: {
       title: "Sell4U",
-      subtitle: "I sell → Claw does EVERYTHING for me",
+      subtitle: "I sell → Do4U does everything for me",
       newListing: "+ Sell",
       step1: "Tell & Show",
       step2: "AI Enhances",
@@ -120,14 +120,14 @@ const translations = {
       step4: "Publish",
       speakPrompt: "Describe your item by voice (10-15 sec)",
       takePhotos: "Take 4-8 photos",
-      aiProcessing: "Claw is analyzing...",
+      aiProcessing: "Do4U is analyzing...",
       preview: "Listing Preview",
-      publish: "Launch Claw 🚀",
+      publish: "Launch Do4U 🚀",
       published: "Published!",
     },
     buy: {
       title: "Buy4U",
-      subtitle: "Coming soon — Claw will find the best deals for you",
+      subtitle: "Coming soon — Buy4U will find the best deals for you",
       comingSoon: "Coming Soon",
     },
     dashboard: {

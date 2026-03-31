@@ -5,6 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** AI assistant messages (Do4U); legacy chats may still use "claw". */
+export function isDo4UAiSender(sender: string): boolean {
+  return sender === "do4u" || sender === "claw";
+}
+
 export function formatPrice(price: number, currency = "RUB"): string {
   return new Intl.NumberFormat(currency === "RUB" ? "ru-RU" : "en-US", {
     style: "currency",
