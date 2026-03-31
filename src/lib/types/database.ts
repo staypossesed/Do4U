@@ -286,6 +286,113 @@ export interface Database {
         };
         Relationships: [];
       };
+      platform_connections: {
+        Row: {
+          id: string;
+          user_id: string;
+          platform_slug: string;
+          access_token: string;
+          refresh_token: string | null;
+          token_expires_at: string | null;
+          platform_user_id: string | null;
+          platform_user_name: string | null;
+          extra: Json;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          platform_slug: string;
+          access_token: string;
+          refresh_token?: string | null;
+          token_expires_at?: string | null;
+          platform_user_id?: string | null;
+          platform_user_name?: string | null;
+          extra?: Json;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          access_token?: string;
+          refresh_token?: string | null;
+          token_expires_at?: string | null;
+          platform_user_id?: string | null;
+          platform_user_name?: string | null;
+          extra?: Json;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      external_posts: {
+        Row: {
+          id: string;
+          listing_id: string;
+          platform_slug: string;
+          external_id: string | null;
+          external_url: string | null;
+          status: string;
+          error: string | null;
+          posted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          listing_id: string;
+          platform_slug: string;
+          external_id?: string | null;
+          external_url?: string | null;
+          status?: string;
+          error?: string | null;
+          posted_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          external_id?: string | null;
+          external_url?: string | null;
+          status?: string;
+          error?: string | null;
+          posted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      external_messages: {
+        Row: {
+          id: string;
+          user_id: string;
+          listing_id: string | null;
+          external_post_id: string | null;
+          platform_slug: string;
+          sender_name: string;
+          sender_platform_id: string | null;
+          text: string;
+          is_incoming: boolean;
+          read: boolean;
+          platform_chat_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          listing_id?: string | null;
+          external_post_id?: string | null;
+          platform_slug: string;
+          sender_name?: string;
+          sender_platform_id?: string | null;
+          text: string;
+          is_incoming?: boolean;
+          read?: boolean;
+          platform_chat_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          read?: boolean;
+        };
+        Relationships: [];
+      };
       moderation_logs: {
         Row: {
           id: string;
