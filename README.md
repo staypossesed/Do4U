@@ -1,6 +1,6 @@
-# ClawEverything — Sell4U MVP
+# Do4U — Sell4U / Buy4U MVP
 
-**Claw делает ВСЁ за тебя.** Продавай одним голосовым сообщением.
+**Do4U делает за тебя:** продажа, покупка и дальше — автоматизация (в т.ч. переписка и объявления).
 
 Mobile-first PWA на Next.js 15 App Router.
 
@@ -50,7 +50,7 @@ src/
 │   ├── layout.tsx          # Root layout + providers
 │   └── page.tsx            # Landing page
 ├── components/
-│   ├── icons/              # ClawLogo SVG
+│   ├── icons/              # Do4U logo SVG
 │   ├── layout/             # Header, BottomNav, Providers
 │   └── ui/                 # Button, Card, Input, Badge, Skeleton
 ├── lib/
@@ -68,7 +68,7 @@ See `supabase/migrations/001_initial_schema.sql`:
 - **users** — profile with PostGIS location, style_examples
 - **listings** — items with AI metadata, dual-language titles
 - **listing_images** — original + AI-enhanced URLs
-- **chats** — buyer/seller messages (JSONB), Claw-managed flag
+- **chats** — buyer/seller messages (JSONB), AI-managed flag (`is_claw_managed` in DB)
 - **notifications** — push notifications with read status
 - **moderation_logs** — AI + human review pipeline
 
@@ -95,4 +95,4 @@ See `supabase/migrations/001_initial_schema.sql`:
 
 ## License
 
-Private — ClawEverything
+Private — Do4U

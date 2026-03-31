@@ -1,27 +1,23 @@
 {
-  "name": "ClawEverything — Sell4U",
-  "short_name": "ClawEverything",
-  "description": "Claw делает ВСЁ за тебя. Продавай одним голосовым сообщением.",
-  "start_url": "/dashboard",
+  "name": "Do4U — Sell4U & Buy4U",
+  "short_name": "Do4U",
+  "description": "Do4U: автоматизация продаж (Sell4U) и покупок (Buy4U).",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#1a1625",
+  "background_color": "#0a0a0f",
   "theme_color": "#ff6b2b",
-  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ],
-  "categories": ["shopping", "lifestyle"],
-  "lang": "ru",
-  "dir": "ltr"
+  ]
 }
