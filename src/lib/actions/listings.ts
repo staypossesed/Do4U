@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import type { ListingCategory } from "@/lib/types/database";
+import { moderateListingContent } from "@/lib/ai/moderation";
+import { ensurePublicUserRow } from "@/lib/ensure-user-profile";
 
 interface CreateListingInput {
   title: string;
@@ -26,6 +28,23 @@ export async function createListing(input: CreateListingInput) {
     return { error: "Not authenticated" };
   }
 
+  const ensured = await ensurePublicUserRow(supabase, user);
+  if (!ensured.ok) {
+    return { error: ensured.message };
+  }
+
+  const mod = await moderateListingContent({
+    title: input.title,
+    description: input.description,
+    transcript: input.voiceTranscript,
+  });
+  if (!mod.allowed) {
+    return {
+      error: "MODERATION_BLOCKED",
+      moderationReason: mod.reason,
+    };
+  }
+
   // Build location point if coordinates provided
   const location = input.lat && input.lng
     ? `POINT(${input.lng} ${input.lat})`
@@ -37,9 +56,9 @@ export async function createListing(input: CreateListingInput) {
     .insert({
       user_id: user.id,
       title: input.title,
-      title_en: input.titleEn,
+      title_en: input.titleEn?.trim() ? input.titleEn.trim() : null,
       description: input.description,
-      description_en: input.descriptionEn,
+      description_en: input.descriptionEn?.trim() ? input.descriptionEn.trim() : null,
       price: input.price,
       suggested_price: input.price,
       category: input.category,
@@ -75,13 +94,23 @@ export async function createListing(input: CreateListingInput) {
     }
   }
 
-  // Create moderation log
   await supabase.from("moderation_logs").insert({
     listing_id: listing.id,
-    status: "approved", // MVP: auto-approve, TODO: AI moderation
-    ai_score: 0.95,
-    ai_reason: "Auto-approved in MVP mode",
+    status: "approved",
+    ai_score: 1,
+    ai_reason: "Passed AI moderation before publish",
   });
+
+  const { error: notifErr } = await supabase.from("notifications").insert({
+    user_id: user.id,
+    type: "listing_published",
+    title: "Объявление опубликовано",
+    message: "Модерация пройдена. Do4U показывает его покупателям рядом с тобой.",
+    data: { listing_id: listing.id },
+  });
+  if (notifErr) {
+    console.warn("Listing published notification:", notifErr.message);
+  }
 
   return { success: true, listingId: listing.id };
 }
