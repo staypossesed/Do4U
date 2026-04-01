@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { GROK_MODELS_TEXT_ONLY } from "@/lib/ai/grok-models";
 
 const SYSTEM_PROMPT = `You are Do4U AI assistant for the Do4U marketplace (Sell4U).
 You're chatting on behalf of a seller about their listing.
@@ -35,19 +36,27 @@ export async function POST(request: NextRequest) {
 async function callGrok(prompt: string): Promise<string> {
   const key = process.env.GROK_API_KEY;
   if (!key || key.startsWith("your-")) throw new Error("no key");
-  const res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: "grok-2-1212",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }],
-      temperature: 0.7,
-      max_tokens: 150,
-    }),
-  });
-  if (!res.ok) throw new Error(`${res.status}`);
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || "Спасибо!";
+
+  const payload = {
+    messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }],
+    temperature: 0.7,
+    max_tokens: 150,
+  };
+
+  let lastStatus = 0;
+  for (const model of GROK_MODELS_TEXT_ONLY) {
+    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model, ...payload }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || "Спасибо!";
+    }
+    lastStatus = res.status;
+  }
+  throw new Error(`${lastStatus}`);
 }
 
 async function callOpenAI(prompt: string): Promise<string> {
