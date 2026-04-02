@@ -1,6 +1,12 @@
+/**
+ * Do4U seller draft generation. SUPABASE_SERVICE_ROLE_KEY is used only in this
+ * server route (never exposed to the client) to read seller style_examples and
+ * to update pending_ai_suggestion when the anon session cannot.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const BASE_SYSTEM = `You are Do4U — drafting a reply FOR THE SELLER to send to the buyer.
 Write 1–3 short sentences the seller could send as themselves (first person), not as a bot.
@@ -23,6 +29,15 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = checkRateLimit(`chat-suggest:${user.id}`, 20, 60_000);
+    if (!rl.ok) {
+      const sec = rl.retryAfterMs ? Math.max(1, Math.ceil(rl.retryAfterMs / 1000)) : 60;
+      return NextResponse.json(
+        { error: "Too many requests. Try again in a moment." },
+        { status: 429, headers: { "Retry-After": String(sec) } },
+      );
     }
 
     const { data: chatRow, error: chatErr } = await supabase
