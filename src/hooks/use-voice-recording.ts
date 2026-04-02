@@ -2,6 +2,9 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
+/** Auto-stop recording; UI shows countdown 15 → 0 */
+export const VOICE_RECORD_TARGET_SECONDS = 15;
+
 interface VoiceRecordingResult {
   transcript: string;
   audioBlob: Blob | null;
@@ -170,7 +173,7 @@ export function useVoiceRecording(): VoiceRecordingResult {
   }, [stop]);
 
   useEffect(() => {
-    if (isRecording && duration >= 30) stop();
+    if (isRecording && duration >= VOICE_RECORD_TARGET_SECONDS) stop();
   }, [isRecording, duration, stop]);
 
   useEffect(() => {

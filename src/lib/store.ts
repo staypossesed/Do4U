@@ -7,6 +7,9 @@ interface AppState {
   setLocale: (locale: Locale) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+  /** Increment after profile country changes so Sell preview refetches platforms */
+  countryPlatformsRefreshKey: number;
+  bumpCountryPlatformsRefresh: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -16,11 +19,14 @@ export const useAppStore = create<AppState>()(
       setLocale: (locale) => set({ locale }),
       sidebarOpen: false,
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
+      countryPlatformsRefreshKey: 0,
+      bumpCountryPlatformsRefresh: () =>
+        set((s) => ({ countryPlatformsRefreshKey: s.countryPlatformsRefreshKey + 1 })),
     }),
     {
       name: "do4u-app-store",
       partialize: (state) => ({ locale: state.locale }),
-    }
+    },
   )
 );
 

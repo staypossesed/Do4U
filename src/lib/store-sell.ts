@@ -3,6 +3,14 @@ import type { CapturedPhoto } from "@/hooks/use-camera-capture";
 
 export type SellStep = 1 | 2 | 3 | 4;
 
+export interface ExternalMarketplaceRow {
+  id: string;
+  name: string;
+  slug: string;
+  posting_method: "api" | "template" | "manual";
+  is_api_available: boolean;
+}
+
 interface AIResult {
   title: string;
   titleEn: string;
@@ -40,6 +48,17 @@ interface SellState {
   lat: number | null;
   lng: number | null;
 
+  // Step 4: external marketplaces (by country)
+  externalMarketplaces: ExternalMarketplaceRow[];
+  selectedExternalIds: string[];
+
+  /** After successful internal publish + external templates + auto-publish results */
+  postPublish: {
+    listingId: string;
+    templates: { platformName: string; slug: string; text: string }[];
+    platformResults?: { platform_slug: string; success: boolean; external_url: string | null; error: string | null }[];
+  } | null;
+
   // Actions
   setStep: (step: SellStep, direction: number) => void;
   setTranscript: (t: string) => void;
@@ -54,6 +73,16 @@ interface SellState {
   setPublished: (p: boolean, id?: string) => void;
   setLocation: (lat: number | null, lng: number | null) => void;
   updateAIField: (field: keyof AIResult, value: string | number | string[]) => void;
+  setExternalMarketplaces: (rows: ExternalMarketplaceRow[]) => void;
+  toggleExternalMarketplace: (id: string) => void;
+  selectAllExternalMarketplaces: () => void;
+  setPostPublish: (
+    v: {
+      listingId: string;
+      templates: { platformName: string; slug: string; text: string }[];
+      platformResults?: { platform_slug: string; success: boolean; external_url: string | null; error: string | null }[];
+    } | null,
+  ) => void;
   reset: () => void;
 }
 
@@ -72,6 +101,9 @@ const initialState = {
   listingId: null,
   lat: null,
   lng: null,
+  externalMarketplaces: [],
+  selectedExternalIds: [],
+  postPublish: null,
 };
 
 export const useSellStore = create<SellState>()((set) => ({
@@ -93,5 +125,26 @@ export const useSellStore = create<SellState>()((set) => ({
     set((s) => ({
       aiResult: s.aiResult ? { ...s.aiResult, [field]: value } : null,
     })),
+  setExternalMarketplaces: (externalMarketplaces) =>
+    set({
+      externalMarketplaces,
+      selectedExternalIds:
+        externalMarketplaces.length > 0
+          ? externalMarketplaces.map((r) => r.id)
+          : [],
+    }),
+  toggleExternalMarketplace: (id) =>
+    set((s) => {
+      const has = s.selectedExternalIds.includes(id);
+      const selectedExternalIds = has
+        ? s.selectedExternalIds.filter((x) => x !== id)
+        : [...s.selectedExternalIds, id];
+      return { selectedExternalIds };
+    }),
+  selectAllExternalMarketplaces: () =>
+    set((s) => ({
+      selectedExternalIds: s.externalMarketplaces.map((r) => r.id),
+    })),
+  setPostPublish: (postPublish) => set({ postPublish }),
   reset: () => set(initialState),
 }));
