@@ -42,6 +42,10 @@ export interface Database {
           preferences: Json | null;
           style_examples: string[] | null;
           locale: string;
+          country_code: string | null;
+          city: string | null;
+          latitude: number | null;
+          longitude: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -54,6 +58,10 @@ export interface Database {
           preferences?: Json | null;
           style_examples?: string[] | null;
           locale?: string;
+          country_code?: string | null;
+          city?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -66,7 +74,45 @@ export interface Database {
           preferences?: Json | null;
           style_examples?: string[] | null;
           locale?: string;
+          country_code?: string | null;
+          city?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      marketplace_platforms: {
+        Row: {
+          id: string;
+          country_code: string;
+          name: string;
+          slug: string;
+          is_api_available: boolean;
+          posting_method: "api" | "template" | "manual";
+          description: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          country_code: string;
+          name: string;
+          slug: string;
+          is_api_available?: boolean;
+          posting_method?: "api" | "template" | "manual";
+          description?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          country_code?: string;
+          name?: string;
+          slug?: string;
+          is_api_available?: boolean;
+          posting_method?: "api" | "template" | "manual";
+          description?: string | null;
+          sort_order?: number;
         };
         Relationships: [];
       };
@@ -181,6 +227,7 @@ export interface Database {
           messages: Json;
           last_message_at: string | null;
           is_claw_managed: boolean;
+          pending_ai_suggestion: Json | null;
           status: string;
           created_at: string;
         };
@@ -192,6 +239,7 @@ export interface Database {
           messages?: Json;
           last_message_at?: string | null;
           is_claw_managed?: boolean;
+          pending_ai_suggestion?: Json | null;
           status?: string;
           created_at?: string;
         };
@@ -199,6 +247,7 @@ export interface Database {
           messages?: Json;
           last_message_at?: string | null;
           is_claw_managed?: boolean;
+          pending_ai_suggestion?: Json | null;
           status?: string;
         };
         Relationships: [
