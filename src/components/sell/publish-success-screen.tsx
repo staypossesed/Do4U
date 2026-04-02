@@ -51,7 +51,7 @@ function ConfettiBurst() {
           transition={{
             duration: p.duration,
             delay: p.delay,
-            ease: [0.25, 0.46, 0.45, 0.94],
+            ease: "easeIn",
           }}
         />
       ))}
@@ -132,10 +132,11 @@ export function PublishSuccessScreen({
       <ConfettiBurst />
 
       <motion.div
+        layout
         className="text-center space-y-4 relative z-10"
-        initial={{ opacity: 0, y: 24 }}
+        initial={{ opacity: 0, y: 28 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
       >
         <motion.div
           className="relative w-24 h-24 mx-auto"

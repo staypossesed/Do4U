@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -67,18 +67,20 @@ export default function MyListingsPage() {
             { id: "sold" as const, ru: "Проданные", en: "Sold" },
           ]
         ).map((t) => (
-          <button
+          <motion.button
             key={t.id}
             type="button"
+            layout
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            whileTap={{ scale: 0.98 }}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${
               tab === t.id
                 ? "brand-gradient text-white shadow-md shadow-orange-500/20"
                 : "text-muted-foreground"
             }`}
           >
             {locale === "ru" ? t.ru : t.en}
-          </button>
+          </motion.button>
         ))}
       </div>
 
@@ -89,25 +91,42 @@ export default function MyListingsPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed dark:border-white/10 border-black/10 p-10 text-center">
-          <Package className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground">
-            {locale === "ru"
-              ? tab === "active"
-                ? "Нет активных объявлений"
-                : "Нет проданных"
-              : tab === "active"
-                ? "No active listings"
-                : "No sold listings"}
-          </p>
-          {tab === "active" && (
-            <Button variant="brand" className="mt-4 rounded-xl" asChild>
-              <Link href="/sell/new">{locale === "ru" ? "Создать объявление" : "Create listing"}</Link>
-            </Button>
-          )}
-        </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.25 }}
+            className="rounded-2xl border border-dashed dark:border-white/10 border-black/10 p-10 text-center"
+          >
+            <Package className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">
+              {locale === "ru"
+                ? tab === "active"
+                  ? "Нет активных объявлений"
+                  : "Нет проданных"
+                : tab === "active"
+                  ? "No active listings"
+                  : "No sold listings"}
+            </p>
+            {tab === "active" && (
+              <Button variant="brand" className="mt-4 rounded-xl" asChild>
+                <Link href="/sell/new">{locale === "ru" ? "Создать объявление" : "Create listing"}</Link>
+              </Button>
+            )}
+          </motion.div>
+        </AnimatePresence>
       ) : (
-        <div className="space-y-3">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -12 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
+            className="space-y-3"
+          >
           {filtered.map((listing) => {
             const imgs = [...(listing.listing_images ?? [])].sort((a, b) => a.order - b.order);
             const img = imgs[0]?.url_enhanced || imgs[0]?.url_original;
@@ -159,7 +178,8 @@ export default function MyListingsPage() {
               </motion.div>
             );
           })}
-        </div>
+          </motion.div>
+        </AnimatePresence>
       )}
     </div>
   );

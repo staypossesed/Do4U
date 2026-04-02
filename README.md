@@ -25,7 +25,7 @@ cp .env.local.example .env.local
 
 # 3. Set up Supabase
 # - Create project at supabase.com
-# - Run supabase/migrations/001_initial_schema.sql in SQL Editor
+# - Run migrations in SQL Editor in order: 001, 002–003 as needed, 004, 005, 006
 # - Copy URL and anon key to .env.local
 
 # 4. Run dev server
@@ -71,6 +71,41 @@ See `supabase/migrations/001_initial_schema.sql`:
 - **chats** — buyer/seller messages (JSONB), AI-managed flag (`is_claw_managed` in DB)
 - **notifications** — push notifications with read status
 - **moderation_logs** — AI + human review pipeline
+
+Run `004_marketplace_platforms_and_geo.sql` for:
+- **marketplace_platforms** — external marketplaces per `country_code` (slug, `posting_method`: `api` | `template` | `manual`)
+- **users** — `country_code`, `city`, `latitude`, `longitude` (filled on first login)
+
+Run `005_nearby_listings_marketplace.sql` for:
+- **RPC `nearby_listings_for_marketplace`** — активные объявления в радиусе 30 км (исключая текущего пользователя), сортировки «новые / рядом / популярные / горячие».
+
+## Как протестировать Sell4U flow
+
+1. **Окружение:** заполни `.env.local` (Supabase URL/anon key, `GROK_API_KEY` и/или `OPENAI_API_KEY` для AI и модерации).
+2. **База:** примени миграции, включая `004` и `005`. У пользователя должны быть координаты (автоматически через `GeoBootstrap` или вручную в `users`).
+3. **Профиль:** зайди в **Профиль** → выбери **страну** — на шаге превью Sell4U список площадок в блоке «Куда опубликовать» подтянется из `marketplace_platforms`.
+4. **Создание объявления:** **Продать** → голос → 4–8 фото → дождись AI (скелетоны) → на превью проверь карусель, RU/EN текст, цену, чекбоксы площадок → **Запустить Do4U**. Должен появиться toast «Do4U начал работу…», затем экран успеха с кнопками копирования шаблонов для внешних площадок.
+5. **Модерация:** попробуй заведомо запрещённый товар в описании — ожидай блокировку с предупреждением (`MODERATION_BLOCKED`).
+6. **Внутренний маркетплейс:** вкладка **Рядом с тобой** — только `active` чужие объявления в ~30 км (при отсутствии гео — fallback без дистанции). Фильтры категорий и сортировки.
+7. **Чат:** открой карточку объявления (не как продавец) — отправь сообщение; в **Чаты** список диалогов, realtime через Supabase.
+
+## Как протестировать полный цикл продажи (закрытая бета)
+
+1. **Продавец:** создай объявление (**Продать** → голос → фото → AI → **Запустить Do4U**), дождись экрана успеха и уведомления «Объявление опубликовано».
+2. **Покупатель** (второй аккаунт или инкогнито): открой объявление на **Рядом с тобой**, напиши в чат. У продавца в **Уведомлениях** появится `chat_message` — тап откроет чат (`?chat=`).
+3. **Черновик Do4U:** у продавца включи **Do4U-ответы** в чате или на карточке объявления; после сообщения покупателя вызывается **`POST /api/ai/chat-suggest`** (лимит ~20 запросов/мин на пользователя). В UI появится блок **SellerDraft**: отправить как есть, отредактировать и отправить, или **Отклонить** (очистить черновик).
+4. **Сервисный ключ:** в `.env.local` задай `SUPABASE_SERVICE_ROLE_KEY` только на сервере (Vercel) — для чтения `style_examples` продавца; ключ не попадает в клиентский бандл.
+5. **Миграции:** примени **`006_notifications_chat_triggers.sql`** (уведомления о новых сообщениях, колонка `pending_ai_suggestion`) и включи **Realtime** для таблицы `notifications` в Supabase Dashboard.
+
+## Глобальная логика площадок
+
+1. **Первый вход:** компонент `GeoBootstrap` (в `(app)/layout`) запрашивает `navigator.geolocation`, затем вызывает `POST /api/geo/resolve`, который объединяет координаты с геолокацией по IP ([ipapi.co](https://ipapi.co)) и при необходимости обратным геокодированием ([Nominatim](https://nominatim.openstreetmap.org)). Результат пишется в `public.users` (и в `location` как `POINT`).
+
+2. **Edge Function (опционально):** `supabase/functions/geo-from-ip` — тот же IP-lookup для деплоя на Supabase (`supabase functions deploy geo-from-ip`). В Vercel достаточно API route.
+
+3. **Переменные:** необязательный `IPAPI_TOKEN` в `.env.local` для расширенного лимита ipapi.
+
+4. **Список площадок:** клиент читает `marketplace_platforms` по `country_code` пользователя (после следующих этапов — превью Sell4U и чекбоксы).
 
 ## Features (Этап 1 — Done)
 

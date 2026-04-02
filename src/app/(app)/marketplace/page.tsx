@@ -257,7 +257,7 @@ export default function MarketplacePage() {
               key="empty"
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
               className="flex flex-col items-center justify-center py-16 px-6 text-center"
             >
               <div className="relative mb-8">
@@ -273,18 +273,18 @@ export default function MarketplacePage() {
                   animate={{ y: [0, -6, 0] }}
                   transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <span className="text-5xl" role="img" aria-hidden>🛍️</span>
+                  <span className="text-5xl" role="img" aria-hidden>🏡</span>
                 </motion.div>
               </div>
-              <h2 className="text-lg font-extrabold">
+              <h2 className="text-lg font-extrabold leading-snug">
                 {locale === "ru"
-                  ? "Пока здесь тихо. Стань первым, кто продаст вещь рядом!"
-                  : "It’s quiet here. Be the first to sell something nearby!"}
+                  ? "Здесь пока пусто — зато ты можешь зажечь ленту!"
+                  : "The feed is empty — you can spark it!"}
               </h2>
-              <p className="text-sm text-muted-foreground mt-2 max-w-xs leading-relaxed">
+              <p className="text-sm text-muted-foreground mt-3 max-w-[280px] leading-relaxed">
                 {locale === "ru"
-                  ? "Через пару шагов Do4U поможет с фото, текстом и ценой — соседи увидят объявление в ленте."
-                  : "In a few steps Do4U helps with photos, copy, and price — neighbors will see you in the feed."}
+                  ? "Соседи ищут вещи рядом с домом. Одна продажа — и район оживёт: голос, фото, Do4U соберёт объявление за минуты."
+                  : "Neighbors want stuff close to home. One listing wakes up the area — voice, photos, Do4U builds the ad in minutes."}
               </p>
               <motion.div
                 className="mt-8"
