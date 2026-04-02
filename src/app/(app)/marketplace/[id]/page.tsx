@@ -121,7 +121,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
             .select("id, messages, is_claw_managed, pending_ai_suggestion")
             .eq("listing_id", id)
             .eq("seller_id", user.id)
-            .order("last_message_at", { ascending: false, nullsFirst: false })
+            .order("last_message_at", { ascending: false })
             .limit(1)
             .maybeSingle();
           if (sc) {
