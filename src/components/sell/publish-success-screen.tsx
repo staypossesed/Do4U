@@ -59,15 +59,6 @@ function ConfettiBurst() {
   );
 }
 
-const stepVariants = {
-  hidden: { opacity: 0, x: -12 },
-  show: (i: number) => ({
-    opacity: 1,
-    x: 0,
-    transition: { delay: 0.35 + i * 0.08, duration: 0.4, ease: [0.22, 1, 0.36, 1] },
-  }),
-};
-
 export function PublishSuccessScreen({
   locale,
   onGoHome,
@@ -81,6 +72,7 @@ export function PublishSuccessScreen({
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
   if (!pp) return null;
+  const { listingId, templates } = pp;
 
   async function copyText(slug: string, text: string) {
     try {
@@ -95,7 +87,7 @@ export function PublishSuccessScreen({
 
   function viewListing() {
     useSellStore.getState().reset();
-    router.push(`/marketplace/${pp.listingId}`);
+    router.push(`/marketplace/${listingId}`);
   }
 
   const steps =
@@ -216,10 +208,9 @@ export function PublishSuccessScreen({
           {steps.map((s, i) => (
             <motion.li
               key={s.title}
-              custom={i}
-              variants={stepVariants}
-              initial="hidden"
-              animate="show"
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.35 + i * 0.08, duration: 0.4 }}
               className="flex gap-3 text-left"
             >
               <div
@@ -246,14 +237,14 @@ export function PublishSuccessScreen({
         <p className="text-xs font-bold text-muted-foreground px-1">
           {locale === "ru" ? "Внешние площадки" : "External platforms"}
         </p>
-        {pp.templates.length === 0 ? (
+        {templates.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-3">
             {locale === "ru"
               ? "Только Do4U — внешние площадки не выбраны."
               : "Do4U only — no external platforms selected."}
           </p>
         ) : (
-          pp.templates.map((t) => (
+          templates.map((t) => (
             <Button
               key={t.slug}
               type="button"
