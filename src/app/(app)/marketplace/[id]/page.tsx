@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import type { Json } from "@/lib/types/database";
 import { toast } from "sonner";
+import { SellerDraft } from "@/components/chat/SellerDraft";
 
 interface Listing {
   id: string;
@@ -79,7 +80,6 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
   const [sellerMsgs, setSellerMsgs] = useState<ChatMessage[]>([]);
   const [sellerClawManaged, setSellerClawManaged] = useState(true);
   const [sellerPendingText, setSellerPendingText] = useState<string | null>(null);
-  const [sellerDraft, setSellerDraft] = useState("");
   const [sellerFreeInput, setSellerFreeInput] = useState("");
   const [sellerReplyLoading, setSellerReplyLoading] = useState(false);
 
@@ -130,7 +130,6 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
             setSellerClawManaged(sc.is_claw_managed ?? true);
             const pt = parsePending(sc.pending_ai_suggestion);
             setSellerPendingText(pt);
-            setSellerDraft(pt ?? "");
           }
         }
       }
@@ -171,7 +170,6 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
           if ("pending_ai_suggestion" in row) {
             const pt = parsePending(row.pending_ai_suggestion);
             setSellerPendingText(pt);
-            setSellerDraft(pt ?? "");
           }
         },
       )
@@ -212,7 +210,6 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
       if (error) throw error;
       setSellerMsgs(merged);
       setSellerPendingText(null);
-      setSellerDraft("");
       setSellerFreeInput("");
     } catch {
       toast.error(locale === "ru" ? "Не отправилось" : "Send failed");
@@ -522,41 +519,19 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
                     </div>
                   ))}
                 </div>
-                {sellerClawManaged && sellerPendingText ? (
-                  <div className="mx-3 mb-2 p-3 rounded-xl border border-orange-500/35 bg-orange-500/[0.08] space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-orange-400 flex items-center gap-1">
-                      <Sparkles className="h-3 w-3" />
-                      {locale === "ru" ? "Черновик Do4U" : "Do4U draft"}
-                    </p>
-                    <textarea
-                      value={sellerDraft}
-                      onChange={(e) => setSellerDraft(e.target.value)}
-                      rows={3}
-                      className="w-full text-xs rounded-lg px-2 py-1.5 border dark:border-white/10 border-black/10
-                        dark:bg-black/20 bg-white/80 resize-none focus:outline-none focus:ring-1 focus:ring-orange-400/50"
+                {sellerChatId && sellerClawManaged && sellerPendingText ? (
+                  <div className="mx-3 mb-2">
+                    <SellerDraft
+                      chatId={sellerChatId}
+                      pendingSuggestion={sellerPendingText}
+                      isClawManaged={sellerClawManaged}
+                      messages={sellerMsgs}
+                      locale={locale}
+                      onSuccess={({ messages: next, pendingCleared }) => {
+                        if (next) setSellerMsgs(next);
+                        if (pendingCleared) setSellerPendingText(null);
+                      }}
                     />
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button
-                        type="button"
-                        variant="brand"
-                        size="sm"
-                        className="rounded-xl flex-1 text-xs h-9"
-                        disabled={sellerReplyLoading}
-                        onClick={() => void sendSellerMessage(sellerPendingText)}
-                      >
-                        {locale === "ru" ? "Отправить как есть" : "Send as-is"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl flex-1 text-xs h-9 border-orange-500/30"
-                        disabled={sellerReplyLoading || !sellerDraft.trim()}
-                        onClick={() => void sendSellerMessage(sellerDraft)}
-                      >
-                        {locale === "ru" ? "Отправить правки" : "Send edited"}
-                      </Button>
-                    </div>
                   </div>
                 ) : null}
                 <div className="flex gap-2 px-3 py-2 border-t dark:border-white/5 border-black/5">

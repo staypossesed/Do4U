@@ -12,8 +12,9 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
   MessageCircle, Send, ArrowLeft, Zap, Bot,
-  User, Loader2, Bell, Sparkles,
+  User, Loader2, Bell,
 } from "lucide-react";
+import { SellerDraft } from "@/components/chat/SellerDraft";
 import type { Json } from "@/lib/types/database";
 import { isDo4UAiSender } from "@/lib/utils";
 import { toast } from "sonner";
@@ -61,6 +62,7 @@ export default function ChatsPage() {
 function ChatsPageInner() {
   const searchParams = useSearchParams();
   const focusListing = searchParams.get("listing");
+  const focusChat = searchParams.get("chat");
 
   const { locale } = useAppStore();
   const [chats, setChats] = useState<Chat[]>([]);
@@ -138,13 +140,22 @@ function ChatsPageInner() {
   }, []);
 
   useEffect(() => {
-    if (!focusListing || focusedRef.current || chats.length === 0) return;
+    if (focusedRef.current || chats.length === 0) return;
+    if (focusChat) {
+      const byChat = chats.find((c) => c.id === focusChat);
+      if (byChat) {
+        setActiveChat(byChat.id);
+        focusedRef.current = true;
+      }
+      return;
+    }
+    if (!focusListing) return;
     const hit = chats.find((c) => c.listing_id === focusListing);
     if (hit) {
       setActiveChat(hit.id);
       focusedRef.current = true;
     }
-  }, [focusListing, chats]);
+  }, [focusListing, focusChat, chats]);
 
   if (loading) {
     return (
@@ -241,18 +252,11 @@ function ChatView({
   const { locale } = useAppStore();
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(false);
-  const [draft, setDraft] = useState(() => parsePending(chat.pending_ai_suggestion) ?? "");
   const [suggestLoading, setSuggestLoading] = useState(false);
-  const [sellerSending, setSellerSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const isSeller = chat.seller_id === userId;
   const pendingText = parsePending(chat.pending_ai_suggestion);
-
-  useEffect(() => {
-    const t = parsePending(chat.pending_ai_suggestion);
-    setDraft(t ?? "");
-  }, [chat.pending_ai_suggestion]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -266,35 +270,6 @@ function ChatView({
       return;
     }
     onPatch({ is_claw_managed: next });
-  }
-
-  async function sendSellerText(text: string) {
-    if (!text.trim()) return;
-    setSellerSending(true);
-    const supabase = createClient();
-    const newMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      text: text.trim(),
-      sender: "seller",
-      timestamp: new Date().toISOString(),
-    };
-    const merged = [...chat.messages, newMsg];
-    const { error } = await supabase
-      .from("chats")
-      .update({
-        messages: merged as unknown as Json,
-        last_message_at: new Date().toISOString(),
-        pending_ai_suggestion: null,
-      })
-      .eq("id", chat.id);
-    setSellerSending(false);
-    if (error) {
-      toast.error(locale === "ru" ? "Не отправилось" : "Send failed");
-      return;
-    }
-    onPatch({ messages: merged, pending_ai_suggestion: null });
-    setMsg("");
-    setDraft("");
   }
 
   async function sendMessage() {
@@ -434,42 +409,18 @@ function ChatView({
       </div>
 
       {isSeller && chat.is_claw_managed && pendingText ? (
-        <div className="px-4 py-2 border-t dark:border-white/5 border-black/5 space-y-2">
-          <div className="p-3 rounded-xl border border-orange-500/35 bg-orange-500/[0.08] space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-orange-400 flex items-center gap-1">
-              <Sparkles className="h-3 w-3" />
-              {locale === "ru" ? "Черновик Do4U" : "Do4U draft"}
-            </p>
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={3}
-              className="w-full text-xs rounded-lg px-2 py-1.5 border dark:border-white/10 border-black/10
-                dark:bg-black/20 bg-white/80 resize-none focus:outline-none focus:ring-1 focus:ring-orange-400/50"
-            />
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="brand"
-                size="sm"
-                className="rounded-xl flex-1 text-xs"
-                disabled={sellerSending}
-                onClick={() => void sendSellerText(pendingText)}
-              >
-                {locale === "ru" ? "Отправить как есть" : "Send as-is"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-xl flex-1 text-xs border-orange-500/30"
-                disabled={sellerSending || !draft.trim()}
-                onClick={() => void sendSellerText(draft)}
-              >
-                {locale === "ru" ? "Отправить правки" : "Send edited"}
-              </Button>
-            </div>
-          </div>
+        <div className="px-4 py-2 border-t dark:border-white/5 border-black/5">
+          <SellerDraft
+            chatId={chat.id}
+            pendingSuggestion={pendingText}
+            isClawManaged={chat.is_claw_managed}
+            messages={chat.messages}
+            locale={locale}
+            onSuccess={({ messages: m, pendingCleared }) => {
+              if (m) onPatch({ messages: m, pending_ai_suggestion: null });
+              else if (pendingCleared) onPatch({ pending_ai_suggestion: null });
+            }}
+          />
         </div>
       ) : null}
 
