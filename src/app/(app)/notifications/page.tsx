@@ -30,11 +30,13 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setCurrentUserId(user.id);
 
       const { data } = await supabase
         .from("notifications")
@@ -53,25 +55,33 @@ export default function NotificationsPage() {
     load();
   }, [supabase]);
 
-  // Realtime subscription for new notifications
+  // Realtime: only this user's rows (filter requires Replication on notifications)
   useEffect(() => {
+    if (!currentUserId) return;
     const channel = supabase
-      .channel("notifications-realtime")
+      .channel(`notifications-realtime:${currentUserId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications" },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
         (payload) => {
           const notif = payload.new as Notification;
-          setNotifications(prev => [notif, ...prev]);
-            if (pushEnabled && "Notification" in window) {
+          setNotifications((prev) => [notif, ...prev]);
+          if (pushEnabled && "Notification" in window) {
             new window.Notification(notif.title, { body: notif.message });
           }
-        }
+        },
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [pushEnabled, supabase]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pushEnabled, supabase, currentUserId]);
 
   async function enablePush() {
     if (!("Notification" in window)) {
@@ -101,7 +111,7 @@ export default function NotificationsPage() {
 
     await supabase
       .from("notifications")
-      .update({ is_read: true })
+      .update({ read: true })
       .eq("user_id", user.id)
       .eq("read", false);
 
@@ -123,10 +133,17 @@ export default function NotificationsPage() {
 
   const iconMap: Record<string, React.ReactNode> = {
     new_message: <MessageCircle className="h-4 w-4 text-blue-400" />,
+    chat_message: <MessageCircle className="h-4 w-4 text-sky-400" />,
+    listing_published: <ShoppingBag className="h-4 w-4 text-emerald-400" />,
     hot_buyer: <Zap className="h-4 w-4 text-orange-400" />,
     nearby: <MapPin className="h-4 w-4 text-emerald-400" />,
     sale: <ShoppingBag className="h-4 w-4 text-purple-400" />,
   };
+
+  async function markOneRead(id: string) {
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  }
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -187,12 +204,14 @@ export default function NotificationsPage() {
         <div className="space-y-2">
           <AnimatePresence>
             {notifications.map(n => (
-              <motion.div
+              <motion.button
+                type="button"
                 key={n.id}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
-                className={`flex items-start gap-3 p-3 rounded-2xl border transition-colors ${
+                onClick={() => void markOneRead(n.id)}
+                className={`w-full text-left flex items-start gap-3 p-3 rounded-2xl border transition-colors ${
                   n.read
                     ? "dark:bg-white/3 bg-black/3 dark:border-white/5 border-black/5"
                     : "dark:bg-white/5 bg-black/5 dark:border-white/10 border-black/10"
@@ -209,7 +228,7 @@ export default function NotificationsPage() {
                   <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
                   <p className="text-[10px] text-muted-foreground mt-1">{formatRelativeTime(n.created_at)}</p>
                 </div>
-              </motion.div>
+              </motion.button>
             ))}
           </AnimatePresence>
         </div>
