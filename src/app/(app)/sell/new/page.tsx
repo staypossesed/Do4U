@@ -5,22 +5,26 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppStore } from "@/lib/store";
-import { useSellStore, type SellStep } from "@/lib/store-sell";
-import { useVoiceRecording } from "@/hooks/use-voice-recording";
+import { useSellStore, type SellStep, type ExternalMarketplaceRow } from "@/lib/store-sell";
+import { useVoiceRecording, VOICE_RECORD_TARGET_SECONDS } from "@/hooks/use-voice-recording";
 import { useCameraCapture, type CapturedPhoto } from "@/hooks/use-camera-capture";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { uploadListingPhoto } from "@/lib/supabase/storage";
 import { createListing } from "@/lib/actions/listings";
 import { createClient } from "@/lib/supabase/client";
+import { buildTemplatesForPlatforms } from "@/lib/publish-templates";
+import { Skeleton } from "@/components/ui/skeleton";
 import { correctBrandsInText, searchBrands } from "@/lib/brands";
 import { toast } from "sonner";
 import {
   Mic, Camera, Sparkles, Check, X, ArrowLeft,
   ArrowRight, Zap, ImagePlus, RotateCcw, MapPin,
   RefreshCw, MicOff, CameraOff, Loader2, Edit3,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PublishSuccessScreen } from "@/components/sell/publish-success-screen";
 
 const STEPS: { n: SellStep; icon: React.ElementType; ru: string; en: string }[] = [
   { n: 1, icon: Mic,      ru: "Голос",  en: "Voice"  },
@@ -132,15 +136,32 @@ export default function NewListingPage() {
   async function handlePublish() {
     if (!store.aiResult) return;
 
+    toast.info(
+      locale === "ru"
+        ? "Do4U начал работу над твоим объявлением"
+        : "Do4U started working on your listing",
+      { duration: 4500 },
+    );
+
     store.setPublishing(true);
     try {
+      const cats = ["clothing", "shoes", "accessories", "electronics", "books", "toys", "furniture"] as const;
+      const cat = store.aiResult.category as (typeof cats)[number];
+      if (!cats.includes(cat)) {
+        throw new Error(
+          locale === "ru"
+            ? "Категория не подходит для публикации. Измени описание."
+            : "Category not allowed for publishing. Edit the description.",
+        );
+      }
+
       const result = await createListing({
         title: store.aiResult.title,
         titleEn: store.aiResult.titleEn,
         description: store.aiResult.description,
         descriptionEn: store.aiResult.descriptionEn,
         price: store.aiResult.price,
-        category: store.aiResult.category as "clothing" | "shoes" | "accessories" | "electronics" | "books" | "toys" | "furniture",
+        category: cat,
         tags: store.aiResult.tags,
         voiceTranscript: store.transcript,
         imageUrls: store.uploadedUrls.map((url, i) => ({
@@ -153,12 +174,40 @@ export default function NewListingPage() {
         aiMetadata: { condition: store.aiResult.condition },
       });
 
-      if (result.error) throw new Error(result.error);
+      if ("error" in result && result.error === "MODERATION_BLOCKED") {
+        toast.error(
+          result.moderationReason
+            || (locale === "ru"
+              ? "Модерация: объявление не может быть опубликовано"
+              : "Moderation: listing cannot be published"),
+        );
+        return;
+      }
 
-      store.setPublished(true, result.listingId ?? undefined);
-      toast.success(locale === "ru" ? "Объявление опубликовано!" : "Listing published!");
+      if ("error" in result && result.error) {
+        throw new Error(result.error);
+      }
 
-      setTimeout(() => router.push("/dashboard"), 1500);
+      if (!("success" in result) || !result.success || !result.listingId) {
+        throw new Error("Publish failed");
+      }
+
+      const templates = buildTemplatesForPlatforms(
+        store.externalMarketplaces,
+        store.selectedExternalIds,
+        {
+          title: store.aiResult.title,
+          titleEn: store.aiResult.titleEn,
+          description: store.aiResult.description,
+          descriptionEn: store.aiResult.descriptionEn,
+          price: store.aiResult.price,
+          tags: store.aiResult.tags,
+        },
+      );
+
+      store.setPublished(true, result.listingId);
+      store.setPostPublish({ listingId: result.listingId, templates });
+      toast.success(locale === "ru" ? "Опубликовано в Do4U!" : "Published on Do4U!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Publishing failed");
     } finally {
@@ -172,6 +221,18 @@ export default function NewListingPage() {
     (store.step === 1 && store.transcript.length >= 5) ||
     (store.step === 2 && store.photos.length >= 1) ||
     (store.step === 3 && !!store.aiResult);
+
+  if (store.postPublish) {
+    return (
+      <PublishSuccessScreen
+        locale={locale}
+        onGoHome={() => {
+          useSellStore.getState().reset();
+          router.push("/dashboard");
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-dvh pb-4">
@@ -249,7 +310,7 @@ export default function NewListingPage() {
               : <Zap className="h-4 w-4 mr-1.5 fill-white" />}
             {store.published
               ? (locale === "ru" ? "Опубликовано!" : "Published!")
-              : (locale === "ru" ? "Запустить Do4U 🚀" : "Launch Do4U 🚀")}
+              : (locale === "ru" ? "Запустить Do4U" : "Launch Do4U")}
           </Button>
         )}
       </div>
@@ -289,49 +350,127 @@ function StepVoice() {
     else voice.start();
   }
 
+  const secondsLeft = Math.max(0, VOICE_RECORD_TARGET_SECONDS - voice.duration);
+  const recordProgress = Math.min(1, voice.duration / VOICE_RECORD_TARGET_SECONDS);
+
   return (
-    <div className="space-y-5">
-      <div className="text-center pt-2">
-        <h2 className="text-xl font-extrabold">
+    <div className="space-y-6">
+      <motion.div
+        className="text-center pt-2 space-y-3"
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <h2 className="text-2xl font-black tracking-tight">
           {locale === "ru" ? "Расскажи о товаре" : "Tell us about it"}
         </h2>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-base text-muted-foreground leading-relaxed max-w-sm mx-auto">
           {voice.isSupported
-            ? (locale === "ru" ? "Говори 10–15 секунд — Do4U поймёт всё" : "Speak 10-15 sec — Do4U understands everything")
-            : (locale === "ru" ? "Браузер не поддерживает запись голоса. Введи текст ниже." : "Browser doesn't support voice. Type below.")}
+            ? (locale === "ru"
+              ? `До ${VOICE_RECORD_TARGET_SECONDS} секунд — Do4U всё запомнит`
+              : `Up to ${VOICE_RECORD_TARGET_SECONDS} seconds — Do4U remembers all`)
+            : (locale === "ru" ? "Браузер не поддерживает голос. Напиши текст ниже 👇" : "No voice in this browser. Type below 👇")}
         </p>
-      </div>
+      </motion.div>
 
-      {/* Mic button */}
-      <div className="flex flex-col items-center gap-4 py-4">
-        <div className="relative">
+      {/* Friendly hints */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08, duration: 0.35 }}
+        className="rounded-2xl p-4 space-y-2.5
+          dark:bg-gradient-to-br dark:from-orange-500/10 dark:to-purple-500/10
+          bg-gradient-to-br from-orange-50 to-violet-50
+          border dark:border-white/10 border-orange-100/80"
+      >
+        <p className="text-xs font-black uppercase tracking-widest text-orange-600 dark:text-orange-400">
+          {locale === "ru" ? "Что говорить" : "What to say"}
+        </p>
+        <ul className="text-sm sm:text-[15px] leading-relaxed font-medium text-foreground/90 space-y-1.5">
+          {(locale === "ru"
+            ? [
+                "Как называется вещь и какой бренд?",
+                "Состояние: новое, как новое, б/у?",
+                "Желаемая цена и где удобно встретиться",
+              ]
+            : [
+                "What is it, and which brand?",
+                "Condition: new, like new, or used?",
+                "Your price and a good meetup area",
+              ]
+          ).map((line) => (
+            <li key={line} className="flex gap-2">
+              <span className="text-orange-500 font-bold">·</span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      </motion.div>
+
+      {/* Mic + countdown */}
+      <div className="flex flex-col items-center gap-5 py-2">
+        {voice.isRecording && (
+          <div className="w-full max-w-xs space-y-2">
+            <div className="flex justify-between text-xs font-bold tabular-nums">
+              <span className="text-muted-foreground">{locale === "ru" ? "Запись" : "Recording"}</span>
+              <span className="brand-gradient-text text-sm">{secondsLeft}s</span>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden dark:bg-white/10 bg-black/10">
+              <motion.div
+                className="h-full rounded-full brand-gradient"
+                initial={false}
+                animate={{ width: `${recordProgress * 100}%` }}
+                transition={{ type: "tween", ease: "linear", duration: 0.35 }}
+              />
+            </div>
+            <p className="text-center text-[11px] text-muted-foreground font-medium">
+              {locale === "ru"
+                ? `Осталось секунд: ${secondsLeft} · идеально 10–15 сек`
+                : `${secondsLeft}s left · aim for 10–15 sec`}
+            </p>
+          </div>
+        )}
+
+        <div className="relative flex items-center justify-center w-[7.5rem] h-[7.5rem]">
           {voice.isRecording && (
-            <motion.div className="absolute inset-0 rounded-full brand-gradient"
-              animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0, 0.3] }}
-              transition={{ duration: 1.5, repeat: Infinity }} />
+            <>
+              <motion.div
+                className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-500 via-rose-500 to-purple-600 opacity-35"
+                animate={{ scale: [1, 1.45, 1], opacity: [0.35, 0.08, 0.35] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <motion.div
+                className="absolute inset-2 rounded-full bg-gradient-to-br from-orange-400/40 to-purple-500/30"
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </>
           )}
-          <motion.button className={`relative flex items-center justify-center w-24 h-24 rounded-full
-            ${voice.isRecording ? "bg-rose-500" : "brand-gradient"} shadow-2xl`}
-            whileTap={{ scale: 0.92 }} onClick={toggleRecording}
-            disabled={!voice.isSupported && !store.transcript}>
+          <motion.button
+            type="button"
+            className={`relative z-10 flex items-center justify-center w-28 h-28 rounded-full shadow-2xl
+              ${voice.isRecording
+                ? "bg-gradient-to-br from-orange-500 via-rose-500 to-purple-600 ring-4 ring-white/25"
+                : "brand-gradient ring-2 ring-white/20"}`}
+            whileTap={{ scale: 0.92 }}
+            onClick={toggleRecording}
+            disabled={!voice.isSupported && !store.transcript}
+          >
             {voice.isSupported
-              ? <Mic className={`h-10 w-10 text-white ${voice.isRecording ? "animate-pulse" : ""}`} />
-              : <MicOff className="h-10 w-10 text-white/50" />}
+              ? <Mic className={`h-12 w-12 text-white drop-shadow-md ${voice.isRecording ? "scale-105" : ""}`} />
+              : <MicOff className="h-11 w-11 text-white/50" />}
           </motion.button>
         </div>
 
-        {/* Timer */}
         {voice.isRecording && (
-          <p className="text-sm font-bold text-rose-500 tabular-nums">{voice.duration}s / 30s</p>
-        )}
-
-        {/* Waveform */}
-        {voice.isRecording && (
-          <div className="flex items-end justify-center gap-0.5 h-8">
-            {Array.from({ length: 28 }).map((_, i) => (
-              <motion.div key={i} className="w-1 rounded-full bg-rose-500"
-                animate={{ height: [4, Math.random() * 24 + 4, 4] }}
-                transition={{ duration: 0.4 + Math.random() * 0.3, repeat: Infinity, delay: i * 0.04 }} />
+          <div className="flex items-end justify-center gap-0.5 h-10 w-full max-w-[280px]">
+            {Array.from({ length: 32 }).map((_, i) => (
+              <motion.div
+                key={i}
+                className="w-1 rounded-full bg-gradient-to-t from-orange-500 to-purple-500"
+                animate={{ height: [6, 14 + (i % 5) * 8, 6] }}
+                transition={{ duration: 0.45 + (i % 4) * 0.08, repeat: Infinity, delay: i * 0.03 }}
+              />
             ))}
           </div>
         )}
@@ -517,26 +656,40 @@ function StepAI({ onRetry }: { onRetry: () => void }) {
 
   if (store.aiLoading) {
     return (
-      <div className="space-y-6 pt-2 text-center">
-        <h2 className="text-xl font-extrabold">{locale === "ru" ? "Do4U анализирует…" : "Do4U is analyzing…"}</h2>
+      <div className="space-y-6 pt-2">
+        <div className="text-center space-y-2">
+          <h2 className="text-xl font-extrabold">{locale === "ru" ? "Do4U анализирует…" : "Do4U is analyzing…"}</h2>
+          <p className="text-xs text-muted-foreground">
+            {locale === "ru" ? "Загрузка и AI — обычно 10–30 сек" : "Upload + AI — usually 10–30 sec"}
+          </p>
+        </div>
         <div className="flex justify-center py-2">
-          <motion.div className="w-20 h-20 rounded-full brand-gradient flex items-center justify-center"
-            animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+          <motion.div className="w-20 h-20 rounded-full brand-gradient flex items-center justify-center shadow-xl"
+            animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 2, repeat: Infinity }}>
             <Sparkles className="h-9 w-9 text-white" />
           </motion.div>
         </div>
-        <div className="space-y-2 text-left px-2">
-          {[
-            { label: locale === "ru" ? "Загрузка фото…" : "Uploading photos…", done: store.uploadedUrls.length > 0 },
-            { label: locale === "ru" ? "AI анализ…" : "AI analysis…", done: false },
-          ].map((t) => (
-            <div key={t.label} className="flex items-center gap-3 p-3 rounded-xl dark:bg-white/5 bg-black/5">
-              {t.done
-                ? <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center"><Check className="h-3 w-3 text-emerald-400" /></div>
-                : <Loader2 className="w-5 h-5 animate-spin text-primary" />}
-              <span className="text-sm">{t.label}</span>
-            </div>
-          ))}
+        <div className="space-y-4 px-1">
+          <div className="rounded-2xl border dark:border-white/10 border-black/10 p-4 space-y-3">
+            <Skeleton className="h-4 w-3/5 max-w-[200px]" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+          </div>
+          <div className="rounded-2xl border dark:border-white/10 border-black/10 p-4 space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+          <div className="flex gap-3">
+            <Skeleton className="h-12 flex-1 rounded-xl" />
+            <Skeleton className="h-12 w-24 rounded-xl" />
+          </div>
+        </div>
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          {store.uploadedUrls.length > 0
+            ? (locale === "ru" ? "Фото загружены, идёт разбор…" : "Photos uploaded, analyzing…")
+            : (locale === "ru" ? "Генерация объявления…" : "Generating listing…")}
         </div>
       </div>
     );
@@ -624,64 +777,319 @@ function StepPreview() {
   const { locale } = useAppStore();
   const store = useSellStore();
   const r = store.aiResult;
+  const [carouselIdx, setCarouselIdx] = useState(0);
+  const [editing, setEditing] = useState<null | "title" | "titleEn" | "desc" | "descEn" | "price">(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data: u } = await supabase.from("users").select("country_code").eq("id", user.id).maybeSingle();
+      const raw = u?.country_code;
+      const code =
+        raw && String(raw).length >= 2 ? String(raw).toUpperCase().slice(0, 2) : "RU";
+      const { data: rows } = await supabase
+        .from("marketplace_platforms")
+        .select("id, name, slug, posting_method, is_api_available")
+        .eq("country_code", code)
+        .order("sort_order", { ascending: true });
+      if (cancelled) return;
+      useSellStore.getState().setExternalMarketplaces((rows ?? []) as ExternalMarketplaceRow[]);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    setCarouselIdx(0);
+  }, [store.photos.length, store.uploadedUrls.length]);
 
   if (!r) return null;
 
+  const slides =
+    store.uploadedUrls.length > 0
+      ? store.uploadedUrls.map((url) => ({ src: url, remote: true }))
+      : store.photos.map((p) => ({ src: p.dataUrl, remote: false }));
+  const n = slides.length;
+  const idx = n ? ((carouselIdx % n) + n) % n : 0;
+
   return (
-    <div className="space-y-4 pt-2">
-      <div className="text-center">
-        <h2 className="text-xl font-extrabold">{locale === "ru" ? "Превью" : "Preview"}</h2>
+    <motion.div
+      className="space-y-5 pt-2"
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="text-center space-y-1">
+        <h2 className="text-2xl font-black tracking-tight">{locale === "ru" ? "Превью объявления" : "Listing preview"}</h2>
+        <p className="text-sm text-muted-foreground">
+          {locale === "ru" ? "Нажми на поле, чтобы изменить" : "Tap a field to edit"}
+        </p>
       </div>
 
-      <div className="rounded-2xl overflow-hidden border dark:border-white/10 border-black/10">
-        {store.photos[0] && (
-          <div className="relative">
+      <div className="rounded-[1.25rem] overflow-hidden border dark:border-white/10 border-black/10 shadow-xl shadow-black/5 dark:shadow-black/40">
+        {n > 0 && (
+          <div className="relative aspect-[16/10] bg-black/5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={store.photos[0].dataUrl} alt="Preview" className="w-full object-cover" style={{ aspectRatio: "16/9" }} />
-            <Badge className="absolute top-2 left-2 brand-gradient text-white border-0 text-[10px]">
-              <Sparkles className="h-2.5 w-2.5 mr-1" />AI
+            <img src={slides[idx].src} alt="" className="w-full h-full object-cover" />
+            <Badge className="absolute top-3 left-3 brand-gradient text-white border-0 text-[10px] shadow-lg">
+              <Sparkles className="h-2.5 w-2.5 mr-1" />
+              {slides[idx].remote
+                ? (locale === "ru" ? "Do4U · фото" : "Do4U · photos")
+                : "AI"}
             </Badge>
+            {n > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCarouselIdx((i) => (i - 1 + n) % n)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 text-white flex items-center justify-center backdrop-blur-sm"
+                  aria-label="prev"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCarouselIdx((i) => (i + 1) % n)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 text-white flex items-center justify-center backdrop-blur-sm"
+                  aria-label="next"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+                <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+                  {slides.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setCarouselIdx(i)}
+                      className={`h-1.5 rounded-full transition-all ${i === idx ? "w-6 bg-white" : "w-1.5 bg-white/40"}`}
+                      aria-label={`slide ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
-        <div className="p-4 space-y-2">
-          <div className="flex items-start justify-between">
-            <h3 className="font-bold text-base leading-tight">{r.title}</h3>
-            <p className="text-xl font-extrabold brand-gradient-text price-tag shrink-0 ml-2">₽{r.price.toLocaleString()}</p>
+
+        <div className="p-4 sm:p-5 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1 min-w-0">
+              {editing === "title" ? (
+                <input
+                  autoFocus
+                  value={r.title}
+                  onChange={(e) => store.updateAIField("title", e.target.value)}
+                  onBlur={() => setEditing(null)}
+                  className="w-full text-lg font-bold leading-tight p-2 rounded-xl border dark:border-white/15 border-black/10
+                    dark:bg-white/5 bg-black/5 focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditing("title")}
+                  className="text-left w-full rounded-xl p-2 -m-2 hover:bg-black/[0.04] dark:hover:bg-white/5 transition-colors"
+                >
+                  <h3 className="font-bold text-lg leading-snug">{r.title}</h3>
+                  <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1 mt-0.5">
+                    <Edit3 className="h-3 w-3" />
+                    {locale === "ru" ? "изменить заголовок" : "edit title"}
+                  </span>
+                </button>
+              )}
+            </div>
+            <div className="shrink-0">
+              {editing === "price" ? (
+                <input
+                  type="number"
+                  autoFocus
+                  value={r.price}
+                  onChange={(e) => store.updateAIField("price", Number(e.target.value))}
+                  onBlur={() => setEditing(null)}
+                  className="w-32 text-xl font-black p-2 rounded-xl border dark:border-white/15 border-black/10
+                    dark:bg-white/5 bg-black/5 brand-gradient-text focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditing("price")}
+                  className="text-right rounded-xl p-2 -m-2 hover:bg-black/[0.04] dark:hover:bg-white/5 transition-colors"
+                >
+                  <p className="text-2xl font-black brand-gradient-text price-tag">₽{r.price.toLocaleString()}</p>
+                  <span className="text-[10px] text-muted-foreground font-semibold flex items-center justify-end gap-1">
+                    <Edit3 className="h-3 w-3" />
+                    {locale === "ru" ? "цена" : "price"}
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">{r.description}</p>
+
+          <div className="rounded-xl border border-dashed dark:border-white/15 border-black/15 p-3 space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {locale === "ru" ? "Заголовок (English)" : "Title (English)"}
+            </p>
+            {editing === "titleEn" ? (
+              <input
+                autoFocus
+                value={r.titleEn}
+                onChange={(e) => store.updateAIField("titleEn", e.target.value)}
+                onBlur={() => setEditing(null)}
+                className="w-full text-sm font-semibold p-2 rounded-lg border dark:border-white/15 border-black/10
+                  dark:bg-white/5 bg-black/5 focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditing("titleEn")}
+                className="text-left w-full rounded-lg p-1 -m-1 hover:bg-black/[0.04] dark:hover:bg-white/5"
+              >
+                <p className="text-sm font-semibold">{r.titleEn}</p>
+                <span className="text-[10px] text-muted-foreground">{locale === "ru" ? "нажми, чтобы править EN" : "tap to edit EN"}</span>
+              </button>
+            )}
+          </div>
+
+          {editing === "desc" ? (
+            <textarea
+              autoFocus
+              value={r.description}
+              onChange={(e) => store.updateAIField("description", e.target.value)}
+              onBlur={() => setEditing(null)}
+              rows={5}
+              className="w-full text-sm leading-relaxed p-3 rounded-xl border dark:border-white/15 border-black/10
+                dark:bg-white/5 bg-black/5 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing("desc")}
+              className="text-left w-full rounded-xl p-3 -m-1 hover:bg-black/[0.04] dark:hover:bg-white/5 transition-colors"
+            >
+              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{r.description}</p>
+              <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1 mt-2">
+                <Edit3 className="h-3 w-3" />
+                {locale === "ru" ? "изменить описание" : "edit description"}
+              </span>
+            </button>
+          )}
+
+          <div className="rounded-xl border border-dashed dark:border-white/15 border-black/15 p-3 space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {locale === "ru" ? "Описание (English)" : "Description (English)"}
+            </p>
+            {editing === "descEn" ? (
+              <textarea
+                autoFocus
+                value={r.descriptionEn}
+                onChange={(e) => store.updateAIField("descriptionEn", e.target.value)}
+                onBlur={() => setEditing(null)}
+                rows={4}
+                className="w-full text-sm leading-relaxed p-2 rounded-lg border dark:border-white/15 border-black/10
+                  dark:bg-white/5 bg-black/5 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditing("descEn")}
+                className="text-left w-full rounded-lg p-1 -m-1 hover:bg-black/[0.04] dark:hover:bg-white/5"
+              >
+                <p className="text-sm text-foreground/90 whitespace-pre-wrap">{r.descriptionEn}</p>
+                <span className="text-[10px] text-muted-foreground">{locale === "ru" ? "нажми, чтобы править EN" : "tap to edit EN"}</span>
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center gap-1.5 flex-wrap">
-            {r.tags.slice(0, 5).map(tag => (
-              <Badge key={tag} variant="secondary" className="text-[11px] rounded-full px-2 py-0.5">{tag}</Badge>
+            {r.tags.slice(0, 8).map(tag => (
+              <Badge key={tag} variant="secondary" className="text-[11px] rounded-full px-2.5 py-0.5">{tag}</Badge>
             ))}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3" />
-            {store.lat && store.lng ? `${store.lat.toFixed(2)}, ${store.lng.toFixed(2)}` : (locale === "ru" ? "Локация не определена" : "No location")}
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            {store.lat && store.lng
+              ? `${store.lat.toFixed(2)}, ${store.lng.toFixed(2)}`
+              : (locale === "ru" ? "Локация уточнится в профиле" : "Location from your profile")}
           </div>
         </div>
       </div>
 
-      {/* Cross-posting */}
-      <div className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-          {locale === "ru" ? "Публикация" : "Publishing to"}
+      {/* Куда опубликовать */}
+      <div className="space-y-3">
+        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+          {locale === "ru" ? "Куда опубликовать" : "Where to publish"}
         </p>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { name: "Do4U", active: true },
-            { name: "Avito", active: false },
-            { name: "VK", active: false },
-            { name: "eBay", active: false },
-          ].map(p => (
-            <div key={p.name} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${
-              p.active ? "brand-gradient text-white border-transparent" : "dark:border-white/10 border-black/10 text-muted-foreground"
-            }`}>
-              {p.active && <Check className="h-3 w-3" />}
-              {p.name}
+
+        <div className="rounded-2xl border dark:border-white/10 border-black/10 divide-y dark:divide-white/10 divide-black/10 overflow-hidden shadow-md shadow-black/[0.04]">
+          <div className="flex items-center gap-3 p-3.5 bg-orange-500/5 dark:bg-orange-500/10">
+            <div className="flex h-5 w-5 items-center justify-center rounded-md brand-gradient shrink-0">
+              <Check className="h-3 w-3 text-white" />
             </div>
-          ))}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold">Do4U</p>
+              <p className="text-[11px] text-muted-foreground">
+                {locale === "ru" ? "Внутренний маркетплейс (без комиссии)" : "In-app marketplace (zero fee)"}
+              </p>
+            </div>
+          </div>
+
+          {store.externalMarketplaces.map((p) => {
+            const checked = store.selectedExternalIds.includes(p.id);
+            const isApi = p.posting_method === "api" && p.is_api_available;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => store.toggleExternalMarketplace(p.id)}
+                className="flex w-full items-start gap-3 p-3.5 text-left transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+              >
+                <div
+                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
+                    checked
+                      ? "border-transparent brand-gradient"
+                      : "border-muted-foreground/35 dark:border-white/20"
+                  }`}
+                >
+                  {checked && <Check className="h-3 w-3 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-bold">{p.name}</p>
+                    <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md
+                      dark:bg-white/10 bg-black/5 text-muted-foreground">
+                      {isApi
+                        ? (locale === "ru" ? "Авто" : "Auto")
+                        : p.posting_method === "template"
+                          ? (locale === "ru" ? "Шаблон" : "Template")
+                          : (locale === "ru" ? "Вручную" : "Manual")}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    {isApi
+                      ? (locale === "ru"
+                        ? "Автоматическая публикация (скоро)"
+                        : "Automatic posting (soon)")
+                      : p.posting_method === "template"
+                        ? (locale === "ru"
+                          ? "Текст для копирования после запуска"
+                          : "Copy-paste text after launch")
+                        : (locale === "ru" ? "Вручную на сайте площадки" : "Manual on platform site")}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </div>
+
+        {store.externalMarketplaces.length === 0 && (
+          <p className="text-xs text-muted-foreground px-1">
+            {locale === "ru"
+              ? "Площадки для твоей страны появятся после сохранения региона в профиле."
+              : "External platforms appear once your country is set on your profile."}
+          </p>
+        )}
       </div>
-    </div>
+    </motion.div>
   );
 }
