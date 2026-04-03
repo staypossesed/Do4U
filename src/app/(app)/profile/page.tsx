@@ -7,18 +7,19 @@ import { createClient } from "@/lib/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
 import {
-  LogOut, Settings, Shield, HelpCircle, User,
+  LogOut, Settings, Shield, HelpCircle,
   Package, Star, Globe, ChevronRight, Loader2, MapPin,
   Link2, Unlink, ExternalLink,
 } from "lucide-react";
+import { UserAvatar } from "@/components/profile/user-avatar";
 import { Do4ULogo } from "@/components/icons/do4u-logo";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
 import { updateSellerLocation } from "@/lib/actions/profile";
-import { SUPPORTED_SLUGS } from "@/lib/platforms/registry";
-import { allAdapters } from "@/lib/platforms/registry";
-import type { PlatformSlug } from "@/lib/platforms/types";
+import { getAdapter } from "@/lib/platforms/registry";
+import { getOAuthAdapterSlug } from "@/lib/platforms/catalog-oauth";
+import { Badge } from "@/components/ui/badge";
 
 const COUNTRIES = [
   { code: "RU", ru: "Россия", en: "Russia" },
@@ -63,6 +64,10 @@ export default function ProfilePage() {
   const [savingLocation, setSavingLocation] = useState(false);
   const [connections, setConnections] = useState<Record<string, { status: string; platform_user_name: string | null }>>({});
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [catalogRows, setCatalogRows] = useState<
+    { id: string; name: string; slug: string; is_api_available: boolean; posting_method: string; description: string | null }[]
+  >([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -73,11 +78,43 @@ export default function ProfilePage() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", authUser.id)
-        .maybeSingle();
+      const uid = authUser.id;
+
+      const [
+        profileRes,
+        activeRes,
+        soldRes,
+        listingsRes,
+        connsRes,
+      ] = await Promise.all([
+        supabase
+          .from("users")
+          .select("name, avatar_url, country_code, city")
+          .eq("id", uid)
+          .maybeSingle(),
+        supabase
+          .from("listings")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", uid)
+          .eq("status", "active"),
+        supabase
+          .from("listings")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", uid)
+          .eq("status", "sold"),
+        supabase
+          .from("listings")
+          .select("id, title, price, status")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(8),
+        supabase
+          .from("platform_connections")
+          .select("platform_slug, status, platform_user_name")
+          .eq("user_id", uid),
+      ]);
+
+      const profile = profileRes.data;
 
       setUser({
         email: authUser.email || "",
@@ -87,43 +124,51 @@ export default function ProfilePage() {
       setCountryCode(profile?.country_code ? String(profile.country_code).slice(0, 2).toUpperCase() : null);
       setCityDraft(profile?.city ? String(profile.city) : "");
 
-      const { count: active } = await supabase
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", authUser.id)
-        .eq("status", "active");
+      setStats({
+        active: activeRes.count ?? 0,
+        sold: soldRes.count ?? 0,
+      });
 
-      const { count: sold } = await supabase
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", authUser.id)
-        .eq("status", "sold");
+      setMyListings((listingsRes.data as MyListing[]) ?? []);
 
-      setStats({ active: active || 0, sold: sold || 0 });
-
-      const { data: listings } = await supabase
-        .from("listings")
-        .select("id, title, price, status")
-        .eq("user_id", authUser.id)
-        .order("created_at", { ascending: false })
-        .limit(8);
-
-      setMyListings((listings as MyListing[]) ?? []);
-
-      const { data: conns } = await supabase
-        .from("platform_connections")
-        .select("platform_slug, status, platform_user_name")
-        .eq("user_id", authUser.id);
       const connMap: Record<string, { status: string; platform_user_name: string | null }> = {};
-      for (const c of conns ?? []) {
+      for (const c of connsRes.data ?? []) {
         connMap[c.platform_slug] = { status: c.status, platform_user_name: c.platform_user_name };
       }
       setConnections(connMap);
 
       setLoading(false);
     }
-    load();
+    void load();
   }, []);
+
+  useEffect(() => {
+    if (!countryCode) {
+      setCatalogRows([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setCatalogLoading(true);
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("marketplace_platforms")
+        .select("id, name, slug, is_api_available, posting_method, description")
+        .eq("country_code", countryCode)
+        .order("sort_order", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        console.error("marketplace_platforms:", error);
+        setCatalogRows([]);
+      } else {
+        setCatalogRows(data ?? []);
+      }
+      setCatalogLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [countryCode]);
 
   async function saveSellingLocation() {
     if (!countryCode) {
@@ -181,14 +226,13 @@ export default function ProfilePage() {
   return (
     <div className="px-4 py-6 space-y-6">
       <div className="flex flex-col items-center gap-3">
-        {user?.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.avatar_url} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-primary" />
-        ) : (
-          <div className="w-20 h-20 rounded-full brand-gradient flex items-center justify-center">
-            <User className="h-10 w-10 text-white" />
-          </div>
-        )}
+        {user ? (
+          <UserAvatar
+            avatarUrl={user.avatar_url}
+            name={user.name}
+            email={user.email}
+          />
+        ) : null}
         <div className="text-center">
           <h1 className="text-xl font-extrabold">{user?.name || (locale === "ru" ? "Пользователь" : "User")}</h1>
           <p className="text-sm text-muted-foreground">{user?.email}</p>
@@ -332,68 +376,117 @@ export default function ProfilePage() {
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             {locale === "ru"
-              ? "Подключи аккаунты — Do4U будет автоматически публиковать объявления на все площадки и собирать сообщения покупателей в один чат."
-              : "Connect accounts — Do4U will auto-publish listings and aggregate buyer messages into a single inbox."}
+              ? "Список зависит от страны продаж выше. OAuth-площадки можно подключить для автопостинга и сообщений; остальные — через готовый текст на шаге «Старт»."
+              : "The list depends on your selling country above. OAuth platforms can be linked for auto-posting and messages; others use copy-ready text on the Launch step."}
           </p>
-          {allAdapters().map((adapter) => {
-            const conn = connections[adapter.slug];
-            const isConnected = conn?.status === "connected";
-            return (
-              <div
-                key={adapter.slug}
-                className="flex items-center gap-3 p-3 rounded-xl dark:bg-white/5 bg-black/5"
-              >
-                <span className="text-sm font-semibold flex-1">{adapter.displayName}</span>
-                {isConnected ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-emerald-500 font-bold">
-                      {conn.platform_user_name || (locale === "ru" ? "Подключено" : "Connected")}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-destructive hover:text-destructive"
-                      onClick={async () => {
-                        const supabase = createClient();
-                        await supabase
-                          .from("platform_connections")
-                          .update({ status: "disconnected" })
-                          .eq("platform_slug", adapter.slug);
-                        setConnections((prev) => {
-                          const next = { ...prev };
-                          delete next[adapter.slug];
-                          return next;
-                        });
-                        toast.success(`${adapter.displayName} отключён`);
-                      }}
-                    >
-                      <Unlink className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 rounded-lg text-xs font-bold gap-1"
-                    disabled={connectingPlatform === adapter.slug}
-                    onClick={() => {
-                      setConnectingPlatform(adapter.slug);
-                      const redirectUri = `${window.location.origin}/api/platforms/callback?platform=${adapter.slug}`;
-                      const url = adapter.getAuthUrl("", redirectUri);
-                      window.location.href = url;
-                    }}
-                  >
-                    {connectingPlatform === adapter.slug ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {!countryCode ? (
+            <p className="text-xs text-amber-600/90 dark:text-amber-400/90 font-medium">
+              {locale === "ru"
+                ? "Сначала выбери страну — покажем только локальные площадки."
+                : "Choose a country first — we only show marketplaces that operate there."}
+            </p>
+          ) : catalogLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 rounded-xl" />
+              ))}
+            </div>
+          ) : catalogRows.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {locale === "ru"
+                ? "Нет строк в marketplace_platforms для этой страны. Примени миграцию 009 в Supabase."
+                : "No marketplace_platforms rows for this country. Apply migration 009 in Supabase."}
+            </p>
+          ) : (
+            catalogRows.map((row) => {
+              const oauthSlug = getOAuthAdapterSlug(row.slug);
+              const adapter = oauthSlug ? getAdapter(oauthSlug) : null;
+              const conn = oauthSlug ? connections[oauthSlug] : undefined;
+              const isConnected = conn?.status === "connected";
+              const canOAuth = Boolean(adapter && oauthSlug);
+
+              return (
+                <div
+                  key={row.id}
+                  className="flex flex-col gap-1.5 p-3 rounded-xl dark:bg-white/5 bg-black/5"
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold flex-1 min-w-[40%]">{row.name}</span>
+                    {canOAuth ? (
+                      isConnected ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-emerald-500 font-bold">
+                            {conn!.platform_user_name || (locale === "ru" ? "Подключено" : "Connected")}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-destructive hover:text-destructive"
+                            onClick={async () => {
+                              const supabase = createClient();
+                              await supabase
+                                .from("platform_connections")
+                                .update({ status: "disconnected" })
+                                .eq("platform_slug", oauthSlug!);
+                              setConnections((prev) => {
+                                const next = { ...prev };
+                                delete next[oauthSlug!];
+                                return next;
+                              });
+                              toast.success(locale === "ru" ? `${row.name} отключён` : `${row.name} disconnected`);
+                            }}
+                          >
+                            <Unlink className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-lg text-xs font-bold gap-1"
+                          disabled={connectingPlatform === oauthSlug}
+                          onClick={() => {
+                            if (!adapter || !oauthSlug) return;
+                            setConnectingPlatform(oauthSlug);
+                            const redirectUri = `${window.location.origin}/api/platforms/callback?platform=${oauthSlug}`;
+                            const url = adapter.getAuthUrl("", redirectUri);
+                            window.location.href = url;
+                          }}
+                        >
+                          {connectingPlatform === oauthSlug ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          )}
+                          {locale === "ru" ? "Подключить" : "Connect"}
+                        </Button>
+                      )
                     ) : (
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      <Badge variant="secondary" className="text-[10px] font-bold shrink-0">
+                        {row.posting_method === "manual"
+                          ? locale === "ru"
+                            ? "Вручную"
+                            : "Manual"
+                          : locale === "ru"
+                            ? "Шаблон"
+                            : "Template"}
+                      </Badge>
                     )}
-                    {locale === "ru" ? "Подключить" : "Connect"}
-                  </Button>
-                )}
-              </div>
-            );
-          })}
+                  </div>
+                  {row.description ? (
+                    <p className="text-[10px] text-muted-foreground leading-snug">{row.description}</p>
+                  ) : null}
+                  {!canOAuth ? (
+                    <p className="text-[10px] text-muted-foreground/90">
+                      {locale === "ru"
+                        ? "Текст для этой площадки сформируется при продаже (шаг «Старт»)."
+                        : "Copy-ready text for this board is generated when you sell (Launch step)."}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
         </div>
 
       {[

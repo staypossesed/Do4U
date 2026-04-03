@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import type { Json } from "@/lib/types/database";
 import { toast } from "sonner";
+import { shareListingUrl } from "@/lib/share-listing";
 import { postChatSuggest } from "@/lib/chat-suggest-client";
 import { SellerDraft } from "@/components/chat/SellerDraft";
 import { Do4UToggle } from "@/components/chat/Do4UToggle";
@@ -98,11 +99,14 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
 
       if (data) {
         const row = data as unknown as Listing;
-        setListing(row);
-        await supabase
-          .from("listings")
-          .update({ views_count: (row.views_count ?? 0) + 1 })
-          .eq("id", id);
+        const isOwner = Boolean(user && user.id === row.user_id);
+        if (!isOwner) {
+          const nextCount = (row.views_count ?? 0) + 1;
+          await supabase.from("listings").update({ views_count: nextCount }).eq("id", id);
+          setListing({ ...row, views_count: nextCount });
+        } else {
+          setListing(row);
+        }
 
         if (user && user.id !== row.user_id) {
           const { data: existing } = await supabase
@@ -147,7 +151,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "chats", filter: `id=eq.${chatId}` },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           const row = payload.new as { messages?: unknown };
           if (row.messages) setChatMsgs(parseMessages(row.messages));
         },
@@ -166,7 +170,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "chats", filter: `id=eq.${sellerChatId}` },
-        (payload) => {
+        (payload: { new: Record<string, unknown> }) => {
           const row = payload.new as { messages?: unknown; pending_ai_suggestion?: unknown };
           if (row.messages) setSellerMsgs(parseMessages(row.messages));
           if ("pending_ai_suggestion" in row) {
@@ -387,7 +391,33 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
           >
             <Heart className={`h-5 w-5 ${liked ? "fill-rose-500 text-rose-500" : "text-white"}`} />
           </button>
-          <button type="button" className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center">
+          <button
+            type="button"
+            className="w-9 h-9 rounded-full bg-black/50 flex items-center justify-center"
+            aria-label={locale === "ru" ? "Поделиться" : "Share"}
+            onClick={async () => {
+              if (!listing) return;
+              const url = `${window.location.origin}/marketplace/${listing.id}`;
+              const t = locale === "ru" ? listing.title : listing.title_en || listing.title;
+              const r = await shareListingUrl({
+                url,
+                title: t,
+                text:
+                  locale === "ru"
+                    ? `Смотри объявление: ${t}`
+                    : `Check out: ${t}`,
+              });
+              if (r === "copied") {
+                toast.success(locale === "ru" ? "Ссылка скопирована" : "Link copied");
+              }
+              if (r === "shared") {
+                toast.success(locale === "ru" ? "Отправлено" : "Shared");
+              }
+              if (r === "unsupported") {
+                toast.error(locale === "ru" ? "Не удалось поделиться" : "Could not share");
+              }
+            }}
+          >
             <Share2 className="h-5 w-5 text-white" />
           </button>
         </div>
@@ -401,8 +431,9 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
           </div>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="secondary" className="text-[10px]">{listing.category}</Badge>
-            <span className="text-xs text-muted-foreground">
-              {listing.views_count} {locale === "ru" ? "просм." : "views"}
+            <span className="text-xs text-muted-foreground" title={locale === "ru" ? "Только просмотры страницы внутри Do4U" : "Do4U page opens only (not Avito/VK)"}>
+              {listing.views_count}{" "}
+              {locale === "ru" ? "просм. в Do4U" : "views on Do4U"}
             </span>
             <span className="text-xs text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">

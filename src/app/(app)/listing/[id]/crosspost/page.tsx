@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useMemo, useState, use } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -63,7 +63,7 @@ function generateTemplate(listing: Listing, platform: string): string {
 export default function CrosspostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { locale } = useAppStore();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);

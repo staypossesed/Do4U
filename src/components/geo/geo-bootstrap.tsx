@@ -41,9 +41,9 @@ export function GeoBootstrap() {
         try {
           const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: true,
-              timeout: 15000,
-              maximumAge: 0,
+              enableHighAccuracy: false,
+              timeout: 4000,
+              maximumAge: 600_000,
             });
           });
           latitude = pos.coords.latitude;
@@ -124,9 +124,13 @@ export function GeoBootstrap() {
       }
     }
 
-    run();
+    const t = window.setTimeout(() => {
+      void run();
+    }, 0);
+
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
   }, []);
 

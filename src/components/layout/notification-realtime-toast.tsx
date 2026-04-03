@@ -9,18 +9,18 @@ import { toast } from "sonner";
  * Requires Realtime enabled on `notifications` in Supabase.
  */
 export function NotificationRealtimeToast() {
-  const supabase = createClient();
   const seenRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    const supabase = createClient();
     let cancelled = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    const channelRef: { current: ReturnType<typeof supabase.channel> | null } = { current: null };
 
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || cancelled) return;
 
-      channel = supabase
+      const ch = supabase
         .channel(`notifications-toast:${user.id}`)
         .on(
           "postgres_changes",
@@ -30,7 +30,7 @@ export function NotificationRealtimeToast() {
             table: "notifications",
             filter: `user_id=eq.${user.id}`,
           },
-          (payload) => {
+          (payload: { new: Record<string, unknown> }) => {
             const row = payload.new as { id?: string; title?: string; message?: string };
             if (!row?.id || seenRef.current.has(row.id)) return;
             seenRef.current.add(row.id);
@@ -41,13 +41,17 @@ export function NotificationRealtimeToast() {
           },
         )
         .subscribe();
+      if (!cancelled) channelRef.current = ch;
     })();
 
     return () => {
       cancelled = true;
-      if (channel) supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [supabase]);
+  }, []);
 
   return null;
 }

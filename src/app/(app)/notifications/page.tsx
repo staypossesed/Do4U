@@ -75,8 +75,8 @@ export default function NotificationsPage() {
           table: "notifications",
           filter: `user_id=eq.${currentUserId}`,
         },
-        (payload) => {
-          const notif = payload.new as Notification;
+        (payload: { new: Record<string, unknown> }) => {
+          const notif = payload.new as unknown as Notification;
           setNotifications((prev) => [notif, ...prev]);
           if (pushEnabled && "Notification" in window) {
             new window.Notification(notif.title, { body: notif.message });

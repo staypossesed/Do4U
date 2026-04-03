@@ -31,9 +31,18 @@ function configErrorResponse(): NextResponse {
   });
 }
 
+const AUTH_GET_USER_TIMEOUT_MS = 8000;
+
 export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const isAuthPage = pathname === "/auth" || pathname.startsWith("/auth/");
+  const isPublicPage = pathname === "/" || isAuthPage || pathname === "/offline";
+
   const env = readSupabasePublicEnv();
   if (!env) {
+    if (isPublicPage) {
+      return NextResponse.next({ request });
+    }
     return configErrorResponse();
   }
 
@@ -58,16 +67,24 @@ export async function updateSession(request: NextRequest) {
 
   let user = null as Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"];
   try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<"timeout">((resolve) =>
+        setTimeout(() => resolve("timeout"), AUTH_GET_USER_TIMEOUT_MS),
+      ),
+    ]);
+    if (result === "timeout") {
+      console.warn(
+        "[middleware] supabase.auth.getUser() timed out — check network / Supabase URL. Treating as signed out.",
+      );
+      user = null;
+    } else {
+      user = result.data.user;
+    }
   } catch (e) {
     console.error("[middleware] supabase.auth.getUser failed:", e);
-    return supabaseResponse;
+    user = null;
   }
-
-  const pathname = request.nextUrl.pathname;
-  const isAuthPage = pathname === "/auth" || pathname.startsWith("/auth/");
-  const isPublicPage = pathname === "/" || isAuthPage;
 
   if (!user && !isPublicPage) {
     const url = request.nextUrl.clone();

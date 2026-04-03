@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +47,8 @@ export default function NewListingPage() {
   const geo = useGeolocation();
   const [userCountryCode, setUserCountryCode] = useState<string | null>(null);
   const [userCity, setUserCity] = useState<string | null>(null);
+  /** Drops stale async work when a newer runAIAnalysis starts (avoids wrong listing / loading glitches). */
+  const analyzeGenRef = useRef(0);
 
   const listingPrimary: ListingPrimaryLocale = deriveListingPrimaryLocale(userCountryCode, locale);
 
@@ -82,14 +84,37 @@ export default function NewListingPage() {
     return () => { useSellStore.getState().reset(); };
   }, []);
 
+  useEffect(() => {
+    if (typeof sessionStorage === "undefined") return;
+    sessionStorage.removeItem("do4u_voice_final");
+    sessionStorage.removeItem("do4u_voice_interim");
+  }, []);
+
   function next() {
     if (store.step < 4) {
+      // Merge live STT interim into store so API matches what the user saw (interim was only in the textarea).
+      if (store.step === 1 && typeof sessionStorage !== "undefined") {
+        const interimRaw = (sessionStorage.getItem("do4u_voice_interim") ?? "").trim();
+        if (interimRaw) {
+          const s = useSellStore.getState();
+          const cur = s.transcript.trim();
+          const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
+          const merged =
+            !cur
+              ? interimRaw
+              : norm(cur).endsWith(norm(interimRaw))
+                ? cur
+                : `${cur} ${interimRaw}`;
+          s.setTranscript(correctBrandsInText(merged));
+        }
+      }
       const nextStep = (store.step + 1) as SellStep;
       store.setStep(nextStep, 1);
 
-      // Trigger AI analysis on entering step 3
-      if (nextStep === 3 && !store.aiResult && !store.aiLoading) {
-        runAIAnalysis();
+      // Always re-run AI when landing on step 3 (e.g. user went back to change voice/photos).
+      // Previously `!store.aiResult` skipped analysis and kept a stale listing (wrong item text).
+      if (nextStep === 3) {
+        void runAIAnalysis();
       }
     }
   }
@@ -99,23 +124,26 @@ export default function NewListingPage() {
   }
 
   async function runAIAnalysis() {
+    const gen = ++analyzeGenRef.current;
     store.setAILoading(true);
     store.setAIError(null);
+    store.setAIResult(null);
 
     try {
       // Try uploading photos — but don't fail if upload breaks
       const urls: string[] = [];
-      if (store.photos.length > 0) {
+      const photosSnapshot = useSellStore.getState().photos;
+      if (photosSnapshot.length > 0) {
         try {
           const supabase = createClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Not logged in");
 
           const tempId = crypto.randomUUID();
-          for (let i = 0; i < store.photos.length; i++) {
+          for (let i = 0; i < photosSnapshot.length; i++) {
             try {
               const { publicUrl } = await uploadListingPhoto(
-                store.photos[i].blob, user.id, tempId, i
+                photosSnapshot[i].blob, user.id, tempId, i
               );
               urls.push(publicUrl);
             } catch (uploadErr) {
@@ -126,15 +154,17 @@ export default function NewListingPage() {
           console.warn("Photo upload auth failed, continuing text-only:", authErr);
         }
       }
+      if (analyzeGenRef.current !== gen) return;
       store.setUploadedUrls(urls);
 
       // Call AI — works with or without photos
       const primary = deriveListingPrimaryLocale(userCountryCode, locale);
+      const transcriptForApi = useSellStore.getState().transcript;
       const res = await fetch("/api/ai/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transcript: store.transcript,
+          transcript: transcriptForApi,
           imageUrls: urls,
           primaryLocale: primary,
           countryCode: userCountryCode || undefined,
@@ -155,13 +185,19 @@ export default function NewListingPage() {
         throw new Error(String(data.error) || `AI analysis failed (HTTP ${res.status})`);
       }
 
+      if (analyzeGenRef.current !== gen) return;
+
       store.setAIResult(data.listing as typeof store.aiResult);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      store.setAIError(msg);
-      toast.error(msg);
+      if (analyzeGenRef.current === gen) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        store.setAIError(msg);
+        toast.error(msg);
+      }
     } finally {
-      store.setAILoading(false);
+      if (analyzeGenRef.current === gen) {
+        store.setAILoading(false);
+      }
     }
   }
 
@@ -390,8 +426,14 @@ export default function NewListingPage() {
 function StepVoice() {
   const { locale } = useAppStore();
   const store = useSellStore();
-  const voice = useVoiceRecording();
+  const voice = useVoiceRecording(locale === "ru" ? "ru-RU" : "en-US");
   const [brandHints, setBrandHints] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (typeof sessionStorage === "undefined") return;
+    sessionStorage.setItem("do4u_voice_final", voice.transcript);
+    sessionStorage.setItem("do4u_voice_interim", voice.interimTranscript);
+  }, [voice.transcript, voice.interimTranscript]);
 
   // Sync transcript to store WITH brand autocorrect
   useEffect(() => {

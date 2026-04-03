@@ -42,6 +42,7 @@ ALLOWED CATEGORIES (pick exactly one):
 clothing, shoes, accessories, electronics, books, toys, furniture
 
 RULES:
+- The voice transcript is the source of truth for WHAT is being sold (product, brand). Photos refine condition/details; if they seem to show a different item than the transcript, follow the transcript.
 - "title" and "description" MUST be in Russian (main text for local marketplaces).
 - "titleEn" and "descriptionEn": ONLY if a useful English summary adds value (e.g. export). If not needed, set both to null. Do NOT duplicate the full Russian text into English unless you are providing a proper translation. Prefer null for local-only listings.
 - Title max ~60 chars (Russian). Description: 2-4 sentences, honest, mention defects.
@@ -69,6 +70,7 @@ ALLOWED CATEGORIES (pick exactly one):
 clothing, shoes, accessories, electronics, books, toys, furniture
 
 RULES:
+- The voice transcript is the source of truth for WHAT is being sold (product, brand). Photos refine condition/details; if they seem to show a different item than the transcript, follow the transcript.
 - "title" and "description" MUST be in English only (natural for the seller's country).
 - Set "titleEn" and "descriptionEn" to null — the main fields are already English; no second block required.
 - Title max ~60 chars. Description: 2-4 sentences, honest, mention defects.

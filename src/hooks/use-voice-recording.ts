@@ -17,7 +17,8 @@ interface VoiceRecordingResult {
   duration: number;
 }
 
-export function useVoiceRecording(): VoiceRecordingResult {
+/** BCP 47 tag, e.g. ru-RU or en-US — must match seller language for accurate STT */
+export function useVoiceRecording(speechLang = "ru-RU"): VoiceRecordingResult {
   const [transcript, setTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -74,7 +75,7 @@ export function useVoiceRecording(): VoiceRecordingResult {
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = "ru-RU";
+    recognition.lang = speechLang;
     recognition.maxAlternatives = 1;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,7 +164,7 @@ export function useVoiceRecording(): VoiceRecordingResult {
     }, 1000);
 
     setIsRecording(true);
-  }, [isSupported, stop]);
+  }, [isSupported, stop, speechLang]);
 
   const reset = useCallback(() => {
     stop();

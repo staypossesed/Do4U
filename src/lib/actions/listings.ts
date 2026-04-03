@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ListingCategory } from "@/lib/types/database";
 import { moderateListingContent } from "@/lib/ai/moderation";
 import { ensurePublicUserRow } from "@/lib/ensure-user-profile";
+import { centroidForCountry } from "@/lib/geo/country-centroids";
 
 interface CreateListingInput {
   title: string;
@@ -45,10 +46,31 @@ export async function createListing(input: CreateListingInput) {
     };
   }
 
-  // Build location point if coordinates provided
-  const location = input.lat && input.lng
-    ? `POINT(${input.lng} ${input.lat})`
-    : null;
+  let lat = input.lat;
+  let lng = input.lng;
+
+  if (lat == null || lng == null) {
+    const { data: geoUser } = await supabase
+      .from("users")
+      .select("latitude, longitude, country_code")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (geoUser?.latitude != null && geoUser?.longitude != null) {
+      lat = geoUser.latitude;
+      lng = geoUser.longitude;
+    } else {
+      const cc = geoUser?.country_code ? String(geoUser.country_code).slice(0, 2).toUpperCase() : null;
+      const c = centroidForCountry(cc);
+      if (c) {
+        lat = c.lat;
+        lng = c.lng;
+      }
+    }
+  }
+
+  const location =
+    lat != null && lng != null ? `POINT(${lng} ${lat})` : null;
 
   // Insert listing
   const { data: listing, error: listingErr } = await supabase
@@ -105,7 +127,8 @@ export async function createListing(input: CreateListingInput) {
     user_id: user.id,
     type: "listing_published",
     title: "Объявление опубликовано",
-    message: "Модерация пройдена. Do4U показывает его покупателям рядом с тобой.",
+    message:
+      "Оно в ленте Do4U рядом с твоим городом. Для тысяч просмотров подключи Авито/VK (или другие площадки страны) в Профиле — тогда Do4U выложит туда сам.",
     data: { listing_id: listing.id },
   });
   if (notifErr) {
@@ -193,9 +216,6 @@ export async function fetchListingById(id: string) {
   if (error) {
     return { error: error.message, listing: null };
   }
-
-  // Increment views (fire-and-forget)
-  supabase.rpc("increment_views", { listing_id: id }).then(() => {}, () => {});
 
   return { listing: data };
 }

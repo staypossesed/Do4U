@@ -112,8 +112,8 @@ function ChatsPageInner() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "chats" },
-        (payload) => {
-          const updated = payload.new as Record<string, unknown>;
+        (payload: { new: Record<string, unknown> }) => {
+          const updated = payload.new;
           if (!updated?.id) return;
           setChats((prev) => {
             const idx = prev.findIndex((c) => c.id === updated.id);

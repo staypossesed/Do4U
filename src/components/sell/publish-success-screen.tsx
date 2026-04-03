@@ -8,8 +8,9 @@ import { toast } from "sonner";
 import {
   Check, Copy, PartyPopper, MessageCircle, Bell, Sparkles,
   ExternalLink, PlusCircle, LayoutList, CheckCircle2, XCircle,
-  Link2,
+  Link2, Share2,
 } from "lucide-react";
+import { shareListingUrl } from "@/lib/share-listing";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -102,8 +103,8 @@ export function PublishSuccessScreen({
       ? "\u041F\u043E\u043A\u0443\u043F\u0430\u0442\u0435\u043B\u0438 \u0443\u0436\u0435 \u0432\u0438\u0434\u044F\u0442 \u0435\u0433\u043E. \u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u043F\u0440\u0438\u0434\u0443\u0442 \u0432 \u0435\u0434\u0438\u043D\u044B\u0439 \u0447\u0430\u0442 \u2014 \u0442\u0435\u0431\u0435 \u043D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u043D\u0443\u0436\u043D\u043E \u0434\u0435\u043B\u0430\u0442\u044C."
       : "Buyers can already see it. Messages will land in your unified inbox \u2014 nothing to do on your end."
     : locale === "ru"
-      ? "\u041E\u0431\u044A\u044F\u0432\u043B\u0435\u043D\u0438\u0435 \u043D\u0430 \u0432\u043D\u0443\u0442\u0440\u0435\u043D\u043D\u0435\u043C \u043C\u0430\u0440\u043A\u0435\u0442\u043F\u043B\u0435\u0439\u0441\u0435. \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438 \u043F\u043B\u043E\u0449\u0430\u0434\u043A\u0438 \u0432 \u041F\u0440\u043E\u0444\u0438\u043B\u0435, \u0447\u0442\u043E\u0431\u044B Do4U \u043F\u0443\u0431\u043B\u0438\u043A\u043E\u0432\u0430\u043B \u0432\u0435\u0437\u0434\u0435 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438."
-      : "Listed on our marketplace. Connect platforms in Profile so Do4U auto-publishes everywhere.";
+      ? "\u0421\u0435\u0439\u0447\u0430\u0441 \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u043C\u0430\u0440\u043A\u0435\u0442\u043F\u043B\u0435\u0439\u0441\u0435 Do4U \u2014 \u0443 \u043D\u0430\u0441 \u043C\u0430\u043B\u043E \u0430\u0443\u0434\u0438\u0442\u043E\u0440\u0438\u0438, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u044B \u0431\u0443\u0434\u0443\u0442 \u043C\u0430\u043B\u0435\u043D\u044C\u043A\u0438\u0435. \u041F\u043E\u0434\u0435\u043B\u0438\u0441\u044C \u0441\u0441\u044B\u043B\u043A\u043E\u0439 \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438 \u0410\u0432\u0438\u0442\u043E/VK \u0432 \u041F\u0440\u043E\u0444\u0438\u043B\u0435 \u2014 \u0442\u0430\u043A \u043E\u0445\u0432\u0430\u0442 \u0432\u044B\u0440\u0430\u0441\u0442\u0435\u0442 \u0432 \u0440\u0430\u0437\u044B."
+      : "Right now it’s only on Do4U — we’re still growing, so views stay low until you share the link and connect local platforms (Avito/VK, etc.) in Profile.";
 
   return (
     <div className="relative flex flex-col min-h-dvh px-4 pb-10 pt-6 space-y-6 max-w-lg mx-auto w-full overflow-hidden">
@@ -220,6 +221,45 @@ export function PublishSuccessScreen({
           ))}
         </motion.div>
       )}
+
+      <motion.div
+        className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-3 relative z-10"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3, duration: 0.4 }}
+      >
+        <div className="flex items-center gap-2">
+          <Share2 className="h-4 w-4 text-emerald-400" />
+          <span className="text-sm font-bold">
+            {locale === "ru" ? "\u0420\u0430\u0437\u043E\u0433\u043D\u0438 \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u044B" : "Boost views in minutes"}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {locale === "ru"
+            ? "\u041E\u0442\u043F\u0440\u0430\u0432\u044C \u0441\u0441\u044B\u043B\u043A\u0443 \u0434\u0440\u0443\u0437\u044C\u044F\u043C \u0432 Telegram / WhatsApp \u2014 \u044D\u0442\u043E \u0431\u044B\u0441\u0442\u0440\u0435\u0435 \u0432\u0441\u0435\u0433\u043E, \u043F\u043E\u043A\u0430 \u043C\u0430\u043B\u043E \u043B\u044E\u0434\u0435\u0439 \u043D\u0430 \u0441\u0430\u043C\u043E\u043C Do4U."
+            : "Send the link in WhatsApp, Telegram, or iMessage — that beats waiting for marketplace traffic alone."}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full rounded-xl font-bold border-emerald-500/30 gap-2"
+          onClick={async () => {
+            const url = `${window.location.origin}/marketplace/${listingId}`;
+            const r = await shareListingUrl({
+              url,
+              title: locale === "ru" ? "\u041C\u043E\u0451 \u043E\u0431\u044A\u044F\u0432\u043B\u0435\u043D\u0438\u0435 \u043D\u0430 Do4U" : "My listing on Do4U",
+              text: locale === "ru" ? "\u041F\u043E\u0441\u043C\u043E\u0442\u0440\u0438, \u043C\u043E\u0436\u0435\u0442 \u0438\u043D\u0442\u0435\u0440\u0435\u0441\u043D\u043E:" : "Thought you might want this:",
+            });
+            if (r === "copied") toast.success(locale === "ru" ? "\u0421\u0441\u044B\u043B\u043A\u0430 \u0432 \u0431\u0443\u0444\u0435\u0440\u0435" : "Link copied");
+            if (r === "shared") toast.success(locale === "ru" ? "\u0413\u043E\u0442\u043E\u0432\u043E" : "Shared!");
+            if (r === "unsupported") toast.error(locale === "ru" ? "\u041D\u0435 \u0432\u044B\u0448\u043B\u043E" : "Could not copy/share");
+          }}
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          {locale === "ru" ? "\u041F\u043E\u0434\u0435\u043B\u0438\u0442\u044C\u0441\u044F \u0441\u0441\u044B\u043B\u043A\u043E\u0439" : "Share listing link"}
+        </Button>
+      </motion.div>
 
       {/* If no platforms connected — show CTA */}
       {!hasAutoPublish && (

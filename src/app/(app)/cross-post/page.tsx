@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -52,7 +52,7 @@ const PLATFORMS = [
 
 export default function CrossPostPage() {
   const { locale } = useAppStore();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [listings, setListings] = useState<ListingBasic[]>([]);
   const [loading, setLoading] = useState(true);

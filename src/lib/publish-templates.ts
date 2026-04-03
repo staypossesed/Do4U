@@ -17,6 +17,13 @@ function baseEn(l: ListingTemplateInput) {
   return `${t}\n\n${d}\n\n💰 Price: ${l.price.toLocaleString("en-US")} RUB (approx)\n\n📱 Contact via Do4U\nTags: ${l.tags.join(", ")}`;
 }
 
+/** Generic English template for country-specific boards without bespoke copy. */
+function genericLocal(l: ListingTemplateInput) {
+  const t = l.titleEn || l.title;
+  const d = l.descriptionEn || l.description;
+  return `${t}\n\n${d}\n\n📍 Local / nationwide — price as agreed\n📱 Do4U\n${l.tags.join(", ")}`;
+}
+
 const bySlug: Record<string, (l: ListingTemplateInput) => string> = {
   avito: (l) => `📦 ${l.title}\n\n${l.description}\n\n💰 ${l.price.toLocaleString("ru-RU")} ₽\n\n📱 Do4U — напиши в приложении\n${l.tags.map((t) => `#${t}`).join(" ")}`,
   vk_marketplace: (l) =>
@@ -42,11 +49,47 @@ const bySlug: Record<string, (l: ListingTemplateInput) => string> = {
   subito: (l) => `${l.titleEn || l.title}\n\n${l.descriptionEn || l.description}\n\nDo4U`,
   olx_pl: (l) => `${l.titleEn || l.title}\n\n${l.descriptionEn || l.description}\n\nDo4U PL`,
   allegro: (l) => `${l.title}\n\n${l.description}\n\n${l.price} PLN\nDo4U`,
+
+  mercari: genericLocal,
+  poshmark: genericLocal,
+  nextdoor: genericLocal,
+  ozon_c2c: baseRu,
+  farpost: baseRu,
+  olx_kz: genericLocal,
+  kolesa: genericLocal,
+  krisha: baseRu,
+  prom_ua: (l) => `${l.title}\n\n${l.description}\n\nDo4U UA`,
+  shafa_ua: (l) => `${l.title}\n\n${l.description}\n\nShafa / Do4U`,
+  bigl_ua: (l) => `${l.title}\n\n${l.description}\n\nDo4U`,
+  ria_realty: (l) => `${l.title}\n\n${l.description}\n\nDo4U`,
+  locanto_de: genericLocal,
+  shpock: genericLocal,
+  vinted_es: genericLocal,
+  marktplaats: genericLocal,
+  vinted_nl: genericLocal,
+  vinted_be: genericLocal,
+  "2dehands": genericLocal,
+  olx_pt: genericLocal,
+  custojusto: genericLocal,
+  kijiji: genericLocal,
+  varagesale: genericLocal,
+  gumtree_au: genericLocal,
+  carousell_au: genericLocal,
+  willhaben: genericLocal,
+  tutti_ch: genericLocal,
+  ricardo_ch: genericLocal,
+  blocket: genericLocal,
+  tradera: genericLocal,
+  finn_no: genericLocal,
+  dba_dk: genericLocal,
+  bazos_cz: genericLocal,
+  sbazar_cz: genericLocal,
+  vinted_cz: genericLocal,
 };
 
 export function buildTemplateForSlug(slug: string, l: ListingTemplateInput): string {
   const fn = bySlug[slug];
-  return fn ? fn(l) : baseRu(l);
+  return fn ? fn(l) : genericLocal(l);
 }
 
 export function buildTemplatesForPlatforms(
