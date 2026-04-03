@@ -22,6 +22,8 @@ export interface SellerDraftProps {
   locale: "ru" | "en";
   /** After send or decline: update parent state */
   onSuccess: (next: { messages?: SellerDraftMessage[]; pendingCleared: boolean }) => void;
+  /** When the main chat composer is sending a message */
+  composerBusy?: boolean;
   className?: string;
 }
 
@@ -35,10 +37,12 @@ export function SellerDraft({
   messages,
   locale,
   onSuccess,
+  composerBusy = false,
   className = "",
 }: SellerDraftProps) {
   const [draft, setDraft] = useState(pendingSuggestion ?? "");
   const [busy, setBusy] = useState(false);
+  const locked = busy || composerBusy;
 
   useEffect(() => {
     setDraft(pendingSuggestion ?? "");
@@ -106,7 +110,7 @@ export function SellerDraft({
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         rows={3}
-        disabled={busy}
+        disabled={locked}
         className="w-full text-xs rounded-lg px-2 py-1.5 border dark:border-white/10 border-black/10
           dark:bg-black/20 bg-white/80 resize-none focus:outline-none focus:ring-1 focus:ring-orange-400/50 disabled:opacity-60"
       />
@@ -116,7 +120,7 @@ export function SellerDraft({
           variant="brand"
           size="sm"
           className="rounded-xl flex-1 text-xs min-h-9 gap-2"
-          disabled={busy || !pendingSuggestion.trim()}
+          disabled={locked || !pendingSuggestion.trim()}
           onClick={() => void sendSellerText(pendingSuggestion)}
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : null}
@@ -127,7 +131,7 @@ export function SellerDraft({
           variant="outline"
           size="sm"
           className="rounded-xl flex-1 text-xs min-h-9 border-orange-500/30"
-          disabled={busy || !draft.trim()}
+          disabled={locked || !draft.trim()}
           onClick={() => void sendSellerText(draft)}
         >
           {locale === "ru" ? "Редактировать и отправить" : "Edit and send"}
@@ -137,7 +141,7 @@ export function SellerDraft({
           variant="ghost"
           size="sm"
           className="rounded-xl text-xs min-h-9 text-muted-foreground"
-          disabled={busy}
+          disabled={locked}
           onClick={() => void declineDraft()}
         >
           {locale === "ru" ? "Отклонить" : "Decline"}

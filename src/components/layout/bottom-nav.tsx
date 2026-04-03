@@ -37,14 +37,20 @@ export function BottomNav() {
 
           if (item.isCta) {
             return (
-              <Link key={item.href} href={item.href} className="relative -mt-6">
+              <Link
+                key={item.href}
+                href={item.href}
+                className="relative -mt-6 flex flex-col items-center"
+                aria-label={locale === "ru" ? "Новое объявление" : "New listing"}
+              >
                 <motion.div
-                  whileHover={{ scale: 1.08 }}
-                  whileTap={{ scale: 0.92 }}
-                  className="flex items-center justify-center w-14 h-14 rounded-2xl
-                    brand-gradient shadow-xl glow-orange"
+                  whileHover={{ scale: 1.06 }}
+                  whileTap={{ scale: 0.94 }}
+                  className="flex items-center justify-center w-[3.75rem] h-[3.75rem] rounded-2xl
+                    brand-gradient shadow-xl shadow-orange-500/35 dark:shadow-orange-500/25 glow-orange
+                    ring-2 ring-white/25 dark:ring-white/10"
                 >
-                  <Icon className="h-6 w-6 text-white" strokeWidth={2.5} />
+                  <Icon className="h-7 w-7 text-white" strokeWidth={2.75} />
                 </motion.div>
               </Link>
             );
@@ -67,9 +73,9 @@ export function BottomNav() {
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
                 )}
-                <Icon className={cn("h-5 w-5 relative z-10 transition-transform", active && "scale-110")} />
+                <Icon className={cn("h-5 w-5 relative z-10 transition-transform", active && "scale-110")} strokeWidth={2.2} />
               </div>
-              <span className="text-[10px] font-semibold relative z-10">
+              <span className="text-[10px] font-bold relative z-10 tracking-tight">
                 {t.nav[item.key]}
               </span>
             </Link>

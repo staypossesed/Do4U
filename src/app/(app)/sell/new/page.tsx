@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PublishSuccessScreen } from "@/components/sell/publish-success-screen";
+import { deriveListingPrimaryLocale, type ListingPrimaryLocale } from "@/lib/listing-locale";
 
 const STEPS: { n: SellStep; icon: React.ElementType; ru: string; en: string }[] = [
   { n: 1, icon: Mic,      ru: "Голос",  en: "Voice"  },
@@ -44,6 +45,33 @@ export default function NewListingPage() {
   const router = useRouter();
   const store = useSellStore();
   const geo = useGeolocation();
+  const [userCountryCode, setUserCountryCode] = useState<string | null>(null);
+  const [userCity, setUserCity] = useState<string | null>(null);
+
+  const listingPrimary: ListingPrimaryLocale = deriveListingPrimaryLocale(userCountryCode, locale);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data: u } = await supabase
+        .from("users")
+        .select("country_code, city")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      const raw = u?.country_code;
+      setUserCountryCode(
+        raw && String(raw).length >= 2 ? String(raw).toUpperCase().slice(0, 2) : null,
+      );
+      setUserCity(u?.city ? String(u.city).trim() : null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (geo.lat && geo.lng) store.setLocation(geo.lat, geo.lng);
@@ -101,12 +129,16 @@ export default function NewListingPage() {
       store.setUploadedUrls(urls);
 
       // Call AI — works with or without photos
+      const primary = deriveListingPrimaryLocale(userCountryCode, locale);
       const res = await fetch("/api/ai/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transcript: store.transcript,
           imageUrls: urls,
+          primaryLocale: primary,
+          countryCode: userCountryCode || undefined,
+          sellerCity: userCity || undefined,
         }),
       });
 
@@ -157,9 +189,9 @@ export default function NewListingPage() {
 
       const result = await createListing({
         title: store.aiResult.title,
-        titleEn: store.aiResult.titleEn,
+        titleEn: store.aiResult.titleEn.trim() ? store.aiResult.titleEn : null,
         description: store.aiResult.description,
-        descriptionEn: store.aiResult.descriptionEn,
+        descriptionEn: store.aiResult.descriptionEn.trim() ? store.aiResult.descriptionEn : null,
         price: store.aiResult.price,
         category: cat,
         tags: store.aiResult.tags,
@@ -192,22 +224,53 @@ export default function NewListingPage() {
         throw new Error("Publish failed");
       }
 
+      store.setPublished(true, result.listingId);
+
+      // Auto-publish to connected external platforms in background
+      const { autoPublishToAllPlatforms } = await import("@/lib/platforms/auto-publish");
+      const platformResults = await autoPublishToAllPlatforms(result.listingId);
+
+      const succeeded = platformResults.filter((r) => r.success);
+      const failed = platformResults.filter((r) => !r.success);
+
       const templates = buildTemplatesForPlatforms(
         store.externalMarketplaces,
         store.selectedExternalIds,
         {
           title: store.aiResult.title,
-          titleEn: store.aiResult.titleEn,
+          titleEn: store.aiResult.titleEn.trim() ? store.aiResult.titleEn : null,
           description: store.aiResult.description,
-          descriptionEn: store.aiResult.descriptionEn,
+          descriptionEn: store.aiResult.descriptionEn.trim() ? store.aiResult.descriptionEn : null,
           price: store.aiResult.price,
           tags: store.aiResult.tags,
         },
       );
 
-      store.setPublished(true, result.listingId);
-      store.setPostPublish({ listingId: result.listingId, templates });
-      toast.success(locale === "ru" ? "Опубликовано в Do4U!" : "Published on Do4U!");
+      store.setPostPublish({
+        listingId: result.listingId,
+        templates,
+        platformResults: platformResults.length > 0 ? platformResults : undefined,
+      });
+
+      if (succeeded.length > 0) {
+        toast.success(
+          locale === "ru"
+            ? `Опубликовано на ${succeeded.length} площадк${succeeded.length === 1 ? "е" : "ах"}!`
+            : `Published on ${succeeded.length} platform${succeeded.length === 1 ? "" : "s"}!`,
+        );
+      }
+      if (failed.length > 0) {
+        for (const f of failed) {
+          toast.error(`${f.platform_slug}: ${f.error}`);
+        }
+      }
+      if (platformResults.length === 0) {
+        toast.success(
+          locale === "ru"
+            ? "Опубликовано в Do4U! Подключи площадки в Профиле для авто-публикации."
+            : "Published on Do4U! Connect platforms in Profile for auto-publishing.",
+        );
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Publishing failed");
     } finally {
@@ -281,8 +344,12 @@ export default function NewListingPage() {
             transition={{ type: "spring", stiffness: 300, damping: 30 }} className="h-full">
             {store.step === 1 && <StepVoice />}
             {store.step === 2 && <StepPhotos />}
-            {store.step === 3 && <StepAI onRetry={runAIAnalysis} />}
-            {store.step === 4 && <StepPreview />}
+            {store.step === 3 && (
+              <StepAI onRetry={runAIAnalysis} listingPrimary={listingPrimary} />
+            )}
+            {store.step === 4 && (
+              <StepPreview listingPrimary={listingPrimary} userCountryCode={userCountryCode} />
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -634,7 +701,32 @@ function StepPhotos() {
 
 // ─── Step 3: AI Analysis ────────────────────────────────────────────────────
 
-function StepAI({ onRetry }: { onRetry: () => void }) {
+function formatListingPriceLine(
+  primary: ListingPrimaryLocale,
+  countryCode: string | null,
+  price: number,
+  uiLocale: "ru" | "en",
+): string {
+  if (primary === "ru") return `₽${price.toLocaleString("ru-RU")}`;
+  const cc = countryCode?.toUpperCase() ?? "";
+  if (cc === "US") return `$${price.toLocaleString("en-US")}`;
+  if (cc === "GB") return `£${price.toLocaleString("en-GB")}`;
+  if (["AT", "BE", "DE", "ES", "FR", "IE", "IT", "NL", "PT", "FI", "GR"].includes(cc)) {
+    return `${price.toLocaleString("de-DE")} €`;
+  }
+  if (cc === "PL") return `${price.toLocaleString("pl-PL")} zł`;
+  return uiLocale === "ru"
+    ? `$${price.toLocaleString("en-US")} (USD)`
+    : `$${price.toLocaleString("en-US")}`;
+}
+
+function StepAI({
+  onRetry,
+  listingPrimary,
+}: {
+  onRetry: () => void;
+  listingPrimary: ListingPrimaryLocale;
+}) {
   const { locale } = useAppStore();
   const store = useSellStore();
 
@@ -706,16 +798,31 @@ function StepAI({ onRetry }: { onRetry: () => void }) {
         <p className="text-sm text-muted-foreground mt-1">{locale === "ru" ? "Проверь и измени если нужно" : "Review and edit if needed"}</p>
       </div>
 
-      {/* Editable fields */}
+      {/* Editable fields — one primary language; optional EN only on preview step */}
       <div className="space-y-3">
-        <Field label={locale === "ru" ? "Заголовок (RU)" : "Title (RU)"} value={r.title}
-          onChange={(v) => store.updateAIField("title", v)} />
-        <Field label={locale === "ru" ? "Заголовок (EN)" : "Title (EN)"} value={r.titleEn}
-          onChange={(v) => store.updateAIField("titleEn", v)} />
+        <Field
+          label={
+            listingPrimary === "ru"
+              ? locale === "ru"
+                ? "Заголовок"
+                : "Title (Russian)"
+              : locale === "ru"
+                ? "Заголовок (English)"
+                : "Title"
+          }
+          value={r.title}
+          onChange={(v) => store.updateAIField("title", v)}
+        />
 
         <div>
           <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            {locale === "ru" ? "Описание" : "Description"}
+            {listingPrimary === "ru"
+              ? locale === "ru"
+                ? "Описание"
+                : "Description (Russian)"
+              : locale === "ru"
+                ? "Описание (English)"
+                : "Description"}
           </label>
           <textarea value={r.description}
             onChange={(e) => store.updateAIField("description", e.target.value)}
@@ -726,7 +833,13 @@ function StepAI({ onRetry }: { onRetry: () => void }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              {locale === "ru" ? "Цена ₽" : "Price ₽"}
+              {listingPrimary === "ru"
+                ? locale === "ru"
+                  ? "Цена ₽"
+                  : "Price (RUB)"
+                : locale === "ru"
+                  ? "Цена"
+                  : "Price"}
             </label>
             <input type="number" value={r.price}
               onChange={(e) => store.updateAIField("price", Number(e.target.value))}
@@ -773,12 +886,28 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 
 // ─── Step 4: Preview ────────────────────────────────────────────────────────
 
-function StepPreview() {
-  const { locale } = useAppStore();
+function StepPreview({
+  listingPrimary,
+  userCountryCode,
+}: {
+  listingPrimary: ListingPrimaryLocale;
+  userCountryCode: string | null;
+}) {
+  const { locale, countryPlatformsRefreshKey } = useAppStore();
   const store = useSellStore();
   const r = store.aiResult;
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [editing, setEditing] = useState<null | "title" | "titleEn" | "desc" | "descEn" | "price">(null);
+  const [showOptionalEn, setShowOptionalEn] = useState(
+    () =>
+      !!(store.aiResult?.titleEn?.trim() || store.aiResult?.descriptionEn?.trim()),
+  );
+
+  useEffect(() => {
+    const cur = store.aiResult;
+    if (!cur || listingPrimary !== "ru") return;
+    if (cur.titleEn.trim() || cur.descriptionEn.trim()) setShowOptionalEn(true);
+  }, [listingPrimary, store.aiResult]);
 
   useEffect(() => {
     let cancelled = false;
@@ -799,7 +928,7 @@ function StepPreview() {
       useSellStore.getState().setExternalMarketplaces((rows ?? []) as ExternalMarketplaceRow[]);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [countryPlatformsRefreshKey]);
 
   useEffect(() => {
     setCarouselIdx(0);
@@ -894,7 +1023,13 @@ function StepPreview() {
                   <h3 className="font-bold text-lg leading-snug">{r.title}</h3>
                   <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1 mt-0.5">
                     <Edit3 className="h-3 w-3" />
-                    {locale === "ru" ? "изменить заголовок" : "edit title"}
+                    {listingPrimary === "ru"
+                      ? locale === "ru"
+                        ? "изменить заголовок"
+                        : "edit title"
+                      : locale === "ru"
+                        ? "изменить заголовок (English)"
+                        : "edit title"}
                   </span>
                 </button>
               )}
@@ -916,7 +1051,9 @@ function StepPreview() {
                   onClick={() => setEditing("price")}
                   className="text-right rounded-xl p-2 -m-2 hover:bg-black/[0.04] dark:hover:bg-white/5 transition-colors"
                 >
-                  <p className="text-2xl font-black brand-gradient-text price-tag">₽{r.price.toLocaleString()}</p>
+                  <p className="text-2xl font-black brand-gradient-text price-tag">
+                    {formatListingPriceLine(listingPrimary, userCountryCode, r.price, locale)}
+                  </p>
                   <span className="text-[10px] text-muted-foreground font-semibold flex items-center justify-end gap-1">
                     <Edit3 className="h-3 w-3" />
                     {locale === "ru" ? "цена" : "price"}
@@ -924,31 +1061,6 @@ function StepPreview() {
                 </button>
               )}
             </div>
-          </div>
-
-          <div className="rounded-xl border border-dashed dark:border-white/15 border-black/15 p-3 space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              {locale === "ru" ? "Заголовок (English)" : "Title (English)"}
-            </p>
-            {editing === "titleEn" ? (
-              <input
-                autoFocus
-                value={r.titleEn}
-                onChange={(e) => store.updateAIField("titleEn", e.target.value)}
-                onBlur={() => setEditing(null)}
-                className="w-full text-sm font-semibold p-2 rounded-lg border dark:border-white/15 border-black/10
-                  dark:bg-white/5 bg-black/5 focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setEditing("titleEn")}
-                className="text-left w-full rounded-lg p-1 -m-1 hover:bg-black/[0.04] dark:hover:bg-white/5"
-              >
-                <p className="text-sm font-semibold">{r.titleEn}</p>
-                <span className="text-[10px] text-muted-foreground">{locale === "ru" ? "нажми, чтобы править EN" : "tap to edit EN"}</span>
-              </button>
-            )}
           </div>
 
           {editing === "desc" ? (
@@ -970,36 +1082,91 @@ function StepPreview() {
               <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{r.description}</p>
               <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1 mt-2">
                 <Edit3 className="h-3 w-3" />
-                {locale === "ru" ? "изменить описание" : "edit description"}
+                {listingPrimary === "ru"
+                  ? locale === "ru"
+                    ? "изменить описание"
+                    : "edit description"
+                  : locale === "ru"
+                    ? "изменить описание (English)"
+                    : "edit description"}
               </span>
             </button>
           )}
 
-          <div className="rounded-xl border border-dashed dark:border-white/15 border-black/15 p-3 space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              {locale === "ru" ? "Описание (English)" : "Description (English)"}
-            </p>
-            {editing === "descEn" ? (
-              <textarea
-                autoFocus
-                value={r.descriptionEn}
-                onChange={(e) => store.updateAIField("descriptionEn", e.target.value)}
-                onBlur={() => setEditing(null)}
-                rows={4}
-                className="w-full text-sm leading-relaxed p-2 rounded-lg border dark:border-white/15 border-black/10
-                  dark:bg-white/5 bg-black/5 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setEditing("descEn")}
-                className="text-left w-full rounded-lg p-1 -m-1 hover:bg-black/[0.04] dark:hover:bg-white/5"
-              >
-                <p className="text-sm text-foreground/90 whitespace-pre-wrap">{r.descriptionEn}</p>
-                <span className="text-[10px] text-muted-foreground">{locale === "ru" ? "нажми, чтобы править EN" : "tap to edit EN"}</span>
-              </button>
-            )}
-          </div>
+          {listingPrimary === "ru" && !showOptionalEn && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full rounded-xl text-xs"
+              onClick={() => setShowOptionalEn(true)}
+            >
+              {locale === "ru"
+                ? "+ Английский заголовок и описание (необязательно)"
+                : "+ English title & description (optional)"}
+            </Button>
+          )}
+
+          {listingPrimary === "ru" && showOptionalEn && (
+            <div className="rounded-xl border border-dashed dark:border-orange-500/25 border-orange-400/30 p-3 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                {locale === "ru" ? "На английском (необязательно)" : "In English (optional)"}
+              </p>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground">
+                  {locale === "ru" ? "Заголовок EN" : "Title (EN)"}
+                </p>
+                {editing === "titleEn" ? (
+                  <input
+                    autoFocus
+                    value={r.titleEn}
+                    onChange={(e) => store.updateAIField("titleEn", e.target.value)}
+                    onBlur={() => setEditing(null)}
+                    className="w-full text-sm font-semibold p-2 rounded-lg border dark:border-white/15 border-black/10
+                      dark:bg-white/5 bg-black/5 focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditing("titleEn")}
+                    className="text-left w-full rounded-lg p-1 -m-1 hover:bg-black/[0.04] dark:hover:bg-white/5"
+                  >
+                    <p className="text-sm font-semibold">{r.titleEn || "—"}</p>
+                    <span className="text-[10px] text-muted-foreground">
+                      {locale === "ru" ? "нажми, чтобы править" : "tap to edit"}
+                    </span>
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground">
+                  {locale === "ru" ? "Описание EN" : "Description (EN)"}
+                </p>
+                {editing === "descEn" ? (
+                  <textarea
+                    autoFocus
+                    value={r.descriptionEn}
+                    onChange={(e) => store.updateAIField("descriptionEn", e.target.value)}
+                    onBlur={() => setEditing(null)}
+                    rows={4}
+                    className="w-full text-sm leading-relaxed p-2 rounded-lg border dark:border-white/15 border-black/10
+                      dark:bg-white/5 bg-black/5 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditing("descEn")}
+                    className="text-left w-full rounded-lg p-1 -m-1 hover:bg-black/[0.04] dark:hover:bg-white/5"
+                  >
+                    <p className="text-sm text-foreground/90 whitespace-pre-wrap">{r.descriptionEn || "—"}</p>
+                    <span className="text-[10px] text-muted-foreground">
+                      {locale === "ru" ? "нажми, чтобы править" : "tap to edit"}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5 flex-wrap">
             {r.tags.slice(0, 8).map(tag => (

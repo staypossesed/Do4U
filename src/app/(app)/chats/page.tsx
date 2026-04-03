@@ -15,6 +15,8 @@ import {
   User, Loader2, Bell,
 } from "lucide-react";
 import { SellerDraft } from "@/components/chat/SellerDraft";
+import { Do4UToggle } from "@/components/chat/Do4UToggle";
+import { postChatSuggest } from "@/lib/chat-suggest-client";
 import type { Json } from "@/lib/types/database";
 import { isDo4UAiSender } from "@/lib/utils";
 import { toast } from "sonner";
@@ -262,16 +264,6 @@ function ChatView({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.messages.length]);
 
-  async function toggleClaw(next: boolean) {
-    const supabase = createClient();
-    const { error } = await supabase.from("chats").update({ is_claw_managed: next }).eq("id", chat.id);
-    if (error) {
-      toast.error(locale === "ru" ? "Не сохранилось" : "Could not save");
-      return;
-    }
-    onPatch({ is_claw_managed: next });
-  }
-
   async function sendMessage() {
     if (!msg.trim()) return;
     setSending(true);
@@ -311,11 +303,10 @@ function ChatView({
     if (!isSeller && chat.is_claw_managed) {
       setSuggestLoading(true);
       setTimeout(() => {
-        void fetch("/api/ai/chat-suggest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatId: chat.id, messages: updatedMessages }),
-        }).finally(() => setSuggestLoading(false));
+        void postChatSuggest(
+          { chatId: chat.id, messages: updatedMessages },
+          locale === "en" ? "en" : "ru"
+        ).finally(() => setSuggestLoading(false));
       }, 500);
     }
   }
@@ -342,26 +333,13 @@ function ChatView({
       </div>
 
       {isSeller && (
-        <div className="flex items-center justify-between px-4 py-2 border-b dark:border-white/5 border-black/5">
-          <span className="text-xs font-semibold text-muted-foreground">
-            {locale === "ru" ? "Включить Do4U-ответы" : "Do4U reply drafts"}
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={chat.is_claw_managed}
-            onClick={() => void toggleClaw(!chat.is_claw_managed)}
-            className={`relative h-7 w-12 rounded-full transition-colors shrink-0 ${
-              chat.is_claw_managed ? "brand-gradient" : "dark:bg-white/15 bg-black/15"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-                chat.is_claw_managed ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
+        <Do4UToggle
+          chatId={chat.id}
+          isClawManaged={chat.is_claw_managed}
+          locale={locale}
+          onToggle={(next) => onPatch({ is_claw_managed: next })}
+          className="px-4 border-b dark:border-white/5 border-black/5"
+        />
       )}
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 scrollbar-none">
@@ -416,6 +394,7 @@ function ChatView({
             isClawManaged={chat.is_claw_managed}
             messages={chat.messages}
             locale={locale}
+            composerBusy={sending}
             onSuccess={({ messages: m, pendingCleared }) => {
               if (m) onPatch({ messages: m, pending_ai_suggestion: null });
               else if (pendingCleared) onPatch({ pending_ai_suggestion: null });

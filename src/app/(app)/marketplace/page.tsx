@@ -8,8 +8,9 @@ import { createClient } from "@/lib/supabase/client";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import {
   Search, SlidersHorizontal, MapPin, Heart,
-  Sparkles, TrendingUp, Clock, Zap, Eye,
+  Sparkles, TrendingUp, Clock, Zap, Eye, PlusCircle,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -287,18 +288,29 @@ export default function MarketplacePage() {
                   : "Neighbors want stuff close to home. One listing wakes up the area — voice, photos, Do4U builds the ad in minutes."}
               </p>
               <motion.div
-                className="mt-8"
-                initial={{ opacity: 0, y: 8 }}
+                className="mt-10 relative"
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
+                transition={{ delay: 0.15, duration: 0.35, ease: "easeOut" }}
               >
-                <Link
-                  href="/sell/new"
-                  className="inline-flex items-center justify-center rounded-2xl px-6 py-3.5 text-sm font-bold text-white
-                    brand-gradient glow-orange shadow-lg shadow-orange-500/25 min-h-[48px]"
+                <motion.div
+                  className="absolute inset-0 -m-3 rounded-[1.35rem] bg-gradient-to-r from-orange-500/35 via-amber-400/25 to-purple-500/30 blur-md"
+                  animate={{ opacity: [0.55, 0.95, 0.55], scale: [0.98, 1.02, 0.98] }}
+                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                  aria-hidden
+                />
+                <Button
+                  asChild
+                  size="lg"
+                  className="relative w-full max-w-[min(100%,320px)] rounded-2xl min-h-[52px] text-base font-extrabold text-white
+                    brand-gradient glow-orange shadow-xl shadow-orange-500/35 ring-4 ring-orange-400/35
+                    hover:ring-orange-400/50 hover:scale-[1.02] active:scale-[0.99] transition-transform"
                 >
-                  {locale === "ru" ? "Создать первое объявление" : "Create your first listing"}
-                </Link>
+                  <Link href="/sell/new" className="gap-2">
+                    <PlusCircle className="h-5 w-5 shrink-0" />
+                    {locale === "ru" ? "Создать объявление" : "Create a listing"}
+                  </Link>
+                </Button>
               </motion.div>
             </motion.div>
           ) : (

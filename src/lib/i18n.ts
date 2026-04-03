@@ -8,7 +8,7 @@ const translations = {
     },
     nav: {
       home: "Главная",
-      sell: "Продать",
+      sell: "",
       buy: "Купить",
       chats: "Чаты",
       profile: "Профиль",
@@ -93,7 +93,7 @@ const translations = {
     },
     nav: {
       home: "Home",
-      sell: "Sell",
+      sell: "",
       buy: "Buy",
       chats: "Chats",
       profile: "Profile",

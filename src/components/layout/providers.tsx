@@ -16,8 +16,17 @@ export function Providers({ children }: { children: ReactNode }) {
       <Toaster
         position="top-center"
         richColors
+        closeButton
         toastOptions={{
-          className: "rounded-xl",
+          duration: 4000,
+          className:
+            "rounded-xl border dark:border-white/10 border-black/10 shadow-lg dark:bg-popover bg-background",
+          classNames: {
+            title: "font-semibold text-sm",
+            description: "text-muted-foreground text-sm",
+            actionButton: "font-semibold",
+            cancelButton: "font-medium",
+          },
         }}
       />
     </ThemeProvider>

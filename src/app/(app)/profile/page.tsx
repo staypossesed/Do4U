@@ -9,11 +9,16 @@ import { useRouter } from "next/navigation";
 import {
   LogOut, Settings, Shield, HelpCircle, User,
   Package, Star, Globe, ChevronRight, Loader2, MapPin,
+  Link2, Unlink, ExternalLink,
 } from "lucide-react";
 import { Do4ULogo } from "@/components/icons/do4u-logo";
 import { toast } from "sonner";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
+import { updateSellerLocation } from "@/lib/actions/profile";
+import { SUPPORTED_SLUGS } from "@/lib/platforms/registry";
+import { allAdapters } from "@/lib/platforms/registry";
+import type { PlatformSlug } from "@/lib/platforms/types";
 
 const COUNTRIES = [
   { code: "RU", ru: "Россия", en: "Russia" },
@@ -21,11 +26,22 @@ const COUNTRIES = [
   { code: "GB", ru: "Великобритания", en: "United Kingdom" },
   { code: "DE", ru: "Германия", en: "Germany" },
   { code: "FR", ru: "Франция", en: "France" },
+  { code: "BE", ru: "Бельгия", en: "Belgium" },
+  { code: "NL", ru: "Нидерланды", en: "Netherlands" },
   { code: "ES", ru: "Испания", en: "Spain" },
   { code: "IT", ru: "Италия", en: "Italy" },
   { code: "PL", ru: "Польша", en: "Poland" },
+  { code: "PT", ru: "Португалия", en: "Portugal" },
   { code: "UA", ru: "Украина", en: "Ukraine" },
   { code: "KZ", ru: "Казахстан", en: "Kazakhstan" },
+  { code: "CA", ru: "Канада", en: "Canada" },
+  { code: "AU", ru: "Австралия", en: "Australia" },
+  { code: "AT", ru: "Австрия", en: "Austria" },
+  { code: "CH", ru: "Швейцария", en: "Switzerland" },
+  { code: "SE", ru: "Швеция", en: "Sweden" },
+  { code: "NO", ru: "Норвегия", en: "Norway" },
+  { code: "DK", ru: "Дания", en: "Denmark" },
+  { code: "CZ", ru: "Чехия", en: "Czechia" },
 ];
 
 interface MyListing {
@@ -40,10 +56,13 @@ export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<{ email: string; name: string | null; avatar_url: string | null } | null>(null);
   const [countryCode, setCountryCode] = useState<string | null>(null);
+  const [cityDraft, setCityDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ active: 0, sold: 0 });
   const [myListings, setMyListings] = useState<MyListing[]>([]);
-  const [savingCountry, setSavingCountry] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [connections, setConnections] = useState<Record<string, { status: string; platform_user_name: string | null }>>({});
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -58,7 +77,7 @@ export default function ProfilePage() {
         .from("users")
         .select("*")
         .eq("id", authUser.id)
-        .single();
+        .maybeSingle();
 
       setUser({
         email: authUser.email || "",
@@ -66,6 +85,7 @@ export default function ProfilePage() {
         avatar_url: profile?.avatar_url || authUser.user_metadata?.avatar_url || null,
       });
       setCountryCode(profile?.country_code ? String(profile.country_code).slice(0, 2).toUpperCase() : null);
+      setCityDraft(profile?.city ? String(profile.city) : "");
 
       const { count: active } = await supabase
         .from("listings")
@@ -89,27 +109,48 @@ export default function ProfilePage() {
         .limit(8);
 
       setMyListings((listings as MyListing[]) ?? []);
+
+      const { data: conns } = await supabase
+        .from("platform_connections")
+        .select("platform_slug, status, platform_user_name")
+        .eq("user_id", authUser.id);
+      const connMap: Record<string, { status: string; platform_user_name: string | null }> = {};
+      for (const c of conns ?? []) {
+        connMap[c.platform_slug] = { status: c.status, platform_user_name: c.platform_user_name };
+      }
+      setConnections(connMap);
+
       setLoading(false);
     }
     load();
   }, []);
 
-  async function saveCountry(code: string) {
-    const supabase = createClient();
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return;
-    setSavingCountry(true);
-    const { error } = await supabase
-      .from("users")
-      .update({ country_code: code, updated_at: new Date().toISOString() })
-      .eq("id", authUser.id);
-    setSavingCountry(false);
-    if (error) {
-      toast.error(locale === "ru" ? "Не удалось сохранить страну" : "Could not save country");
+  async function saveSellingLocation() {
+    if (!countryCode) {
+      toast.error(
+        locale === "ru" ? "Выбери страну продаж" : "Select a country",
+      );
       return;
     }
-    setCountryCode(code);
-    toast.success(locale === "ru" ? "Страна обновлена" : "Country updated");
+    setSavingLocation(true);
+    const res = await updateSellerLocation({
+      countryCode,
+      city: cityDraft,
+    });
+    setSavingLocation(false);
+    if (!res.ok) {
+      console.error("updateSellerLocation:", res.message);
+      toast.error(
+        locale === "ru"
+          ? "Не удалось сохранить место. Убедись, что в Supabase применена миграция 004 (country_code, city)."
+          : "Could not save location. Ensure Supabase migration 004 is applied.",
+      );
+      return;
+    }
+    useAppStore.getState().bumpCountryPlatformsRefresh();
+    toast.success(
+      locale === "ru" ? "Место продаж сохранено" : "Selling location saved",
+    );
   }
 
   async function handleSignOut() {
@@ -176,6 +217,17 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      <Button
+        asChild
+        variant="brand"
+        className="w-full rounded-2xl min-h-12 text-sm font-extrabold shadow-lg shadow-orange-500/20 gap-2"
+      >
+        <Link href="/profile/listings">
+          <Package className="h-4 w-4" />
+          {locale === "ru" ? "Мои объявления" : "My listings"}
+        </Link>
+      </Button>
+
       <div className="rounded-2xl border dark:border-white/5 border-black/5 overflow-hidden">
         <div className="p-4 border-b dark:border-white/5 border-black/5">
           <div className="flex items-center gap-2 mb-2">
@@ -202,36 +254,149 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="p-4 border-b dark:border-white/5 border-black/5">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="p-4 border-b dark:border-white/5 border-black/5 space-y-3">
+          <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-bold">{locale === "ru" ? "Страна (для площадок)" : "Country (for platforms)"}</span>
+            <span className="text-sm font-bold">
+              {locale === "ru" ? "Где продаёшь" : "Where you sell"}
+            </span>
           </div>
-          <select
-            value={countryCode || ""}
-            disabled={savingCountry}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v) void saveCountry(v);
-            }}
-            className="w-full h-11 px-3 rounded-xl border dark:border-white/10 border-black/10
-              dark:bg-white/5 bg-black/5 text-sm font-medium"
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            {locale === "ru"
+              ? "Страна и город задают площадки в шаблонах и подсказку AI (цена и формулировки под рынок в радиусе ~50 км / 30 миль от города)."
+              : "Country and city drive platform templates and AI hints (pricing and wording for a ~30 mi / 50 km local market)."}
+          </p>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {locale === "ru" ? "Страна" : "Country"}
+            </label>
+            <select
+              value={countryCode || ""}
+              disabled={savingLocation}
+              onChange={(e) => setCountryCode(e.target.value || null)}
+              className="w-full h-11 mt-1 px-3 rounded-xl border dark:border-white/10 border-black/10
+                dark:bg-white/5 bg-black/5 text-sm font-medium"
+            >
+              <option value="">{locale === "ru" ? "Выбери страну" : "Select country"}</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {locale === "ru" ? c.ru : c.en} ({c.code})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {locale === "ru" ? "Город" : "City"}
+            </label>
+            <input
+              type="text"
+              value={cityDraft}
+              disabled={savingLocation}
+              onChange={(e) => setCityDraft(e.target.value)}
+              placeholder={
+                locale === "ru"
+                  ? "Например: Москва, Брюссель, Остин"
+                  : "e.g. Moscow, Brussels, Austin"
+              }
+              className="w-full h-11 mt-1 px-3 rounded-xl border dark:border-white/10 border-black/10
+                dark:bg-white/5 bg-black/5 text-sm font-medium placeholder:text-muted-foreground/60"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="brand"
+            className="w-full rounded-xl font-bold"
+            disabled={savingLocation || !countryCode}
+            onClick={() => void saveSellingLocation()}
           >
-            <option value="">{locale === "ru" ? "Выбери страну" : "Select country"}</option>
-            {COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {locale === "ru" ? c.ru : c.en} ({c.code})
-              </option>
-            ))}
-          </select>
-          {savingCountry && (
-            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> {locale === "ru" ? "Сохранение…" : "Saving…"}
-            </p>
-          )}
+            {savingLocation ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                {locale === "ru" ? "Сохранение…" : "Saving…"}
+              </>
+            ) : locale === "ru" ? (
+              "Сохранить место продаж"
+            ) : (
+              "Save selling location"
+            )}
+          </Button>
         </div>
 
-        {[
+          <div className="p-4 border-b dark:border-white/5 border-black/5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-bold">
+              {locale === "ru" ? "Подключённые площадки" : "Connected platforms"}
+            </span>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            {locale === "ru"
+              ? "Подключи аккаунты — Do4U будет автоматически публиковать объявления на все площадки и собирать сообщения покупателей в один чат."
+              : "Connect accounts — Do4U will auto-publish listings and aggregate buyer messages into a single inbox."}
+          </p>
+          {allAdapters().map((adapter) => {
+            const conn = connections[adapter.slug];
+            const isConnected = conn?.status === "connected";
+            return (
+              <div
+                key={adapter.slug}
+                className="flex items-center gap-3 p-3 rounded-xl dark:bg-white/5 bg-black/5"
+              >
+                <span className="text-sm font-semibold flex-1">{adapter.displayName}</span>
+                {isConnected ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-emerald-500 font-bold">
+                      {conn.platform_user_name || (locale === "ru" ? "Подключено" : "Connected")}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-destructive hover:text-destructive"
+                      onClick={async () => {
+                        const supabase = createClient();
+                        await supabase
+                          .from("platform_connections")
+                          .update({ status: "disconnected" })
+                          .eq("platform_slug", adapter.slug);
+                        setConnections((prev) => {
+                          const next = { ...prev };
+                          delete next[adapter.slug];
+                          return next;
+                        });
+                        toast.success(`${adapter.displayName} отключён`);
+                      }}
+                    >
+                      <Unlink className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 rounded-lg text-xs font-bold gap-1"
+                    disabled={connectingPlatform === adapter.slug}
+                    onClick={() => {
+                      setConnectingPlatform(adapter.slug);
+                      const redirectUri = `${window.location.origin}/api/platforms/callback?platform=${adapter.slug}`;
+                      const url = adapter.getAuthUrl("", redirectUri);
+                      window.location.href = url;
+                    }}
+                  >
+                    {connectingPlatform === adapter.slug ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    )}
+                    {locale === "ru" ? "Подключить" : "Connect"}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+      {[
           { icon: Settings, label: locale === "ru" ? "Настройки" : "Settings" },
           { icon: Shield, label: locale === "ru" ? "Безопасность" : "Security" },
           { icon: HelpCircle, label: locale === "ru" ? "Помощь" : "Help" },

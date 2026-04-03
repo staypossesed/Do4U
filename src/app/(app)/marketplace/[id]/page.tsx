@@ -15,7 +15,9 @@ import {
 import Link from "next/link";
 import type { Json } from "@/lib/types/database";
 import { toast } from "sonner";
+import { postChatSuggest } from "@/lib/chat-suggest-client";
 import { SellerDraft } from "@/components/chat/SellerDraft";
+import { Do4UToggle } from "@/components/chat/Do4UToggle";
 
 interface Listing {
   id: string;
@@ -181,13 +183,6 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
 
   const isSeller = Boolean(listing && currentUserId && listing.user_id === currentUserId);
 
-  async function toggleSellerClawManaged(next: boolean) {
-    if (!sellerChatId) return;
-    const { error } = await supabase.from("chats").update({ is_claw_managed: next }).eq("id", sellerChatId);
-    if (!error) setSellerClawManaged(next);
-    else toast.error(locale === "ru" ? "Не удалось сохранить" : "Could not save");
-  }
-
   async function sendSellerMessage(text: string) {
     if (!sellerChatId || !text.trim()) return;
     setSellerReplyLoading(true);
@@ -256,14 +251,10 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         if (created?.id && (created.is_claw_managed ?? true)) {
           setBuyerSuggestLoading(true);
           setTimeout(() => {
-            void fetch("/api/ai/chat-suggest", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                chatId: created.id,
-                messages: [newMsg],
-              }),
-            }).finally(() => setBuyerSuggestLoading(false));
+            void postChatSuggest(
+              { chatId: created.id, messages: [newMsg] },
+              locale === "en" ? "en" : "ru"
+            ).finally(() => setBuyerSuggestLoading(false));
           }, 500);
         }
       } else {
@@ -291,11 +282,10 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
         if (managed) {
           setBuyerSuggestLoading(true);
           setTimeout(() => {
-            void fetch("/api/ai/chat-suggest", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chatId, messages: merged }),
-            }).finally(() => setBuyerSuggestLoading(false));
+            void postChatSuggest(
+              { chatId, messages: merged },
+              locale === "en" ? "en" : "ru"
+            ).finally(() => setBuyerSuggestLoading(false));
           }, 500);
         }
       }
@@ -476,26 +466,14 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
               </div>
             ) : (
               <div className="flex flex-col">
-                <div className="flex items-center justify-between gap-2 px-3 py-2 border-b dark:border-white/5 border-black/5">
-                  <span className="text-[11px] font-bold text-muted-foreground">
-                    {locale === "ru" ? "Включить Do4U-ответы" : "Do4U reply drafts"}
-                  </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={sellerClawManaged}
-                    onClick={() => void toggleSellerClawManaged(!sellerClawManaged)}
-                    className={`relative h-7 w-12 rounded-full transition-colors shrink-0 ${
-                      sellerClawManaged ? "brand-gradient" : "dark:bg-white/15 bg-black/15"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-                        sellerClawManaged ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
+                {sellerChatId ? (
+                  <Do4UToggle
+                    chatId={sellerChatId}
+                    isClawManaged={sellerClawManaged}
+                    locale={locale}
+                    onToggle={setSellerClawManaged}
+                  />
+                ) : null}
                 <div className="max-h-44 overflow-y-auto px-3 py-2 space-y-2 scrollbar-none">
                   {sellerMsgs.length === 0 && (
                     <p className="text-xs text-muted-foreground text-center py-2">
@@ -527,6 +505,7 @@ export default function ListingPage({ params }: { params: Promise<{ id: string }
                       isClawManaged={sellerClawManaged}
                       messages={sellerMsgs}
                       locale={locale}
+                      composerBusy={sellerReplyLoading}
                       onSuccess={({ messages: next, pendingCleared }) => {
                         if (next) setSellerMsgs(next);
                         if (pendingCleared) setSellerPendingText(null);
